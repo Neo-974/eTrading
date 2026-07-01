@@ -205,6 +205,32 @@
   .chart-sltp-row .gauge-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
   .chart-sltp-row .mono { font-size: 15px; }
 
+  /* --- Configurateur de stratégie --- */
+  .strategy-section { border-top: 1px solid var(--border-soft); padding-top: 18px; margin-top: 18px; }
+  .strategy-section:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+  .strategy-section h3 { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin: 0 0 14px; display: flex; align-items: center; gap: 8px; }
+  .field label.chk { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text); margin-bottom: 0; }
+  .field label.chk input { width: auto; }
+  .range-field input[type=range] { width: 100%; accent-color: var(--accent); margin-top: 4px; }
+  .range-val { color: var(--accent); font-family: var(--font-mono); }
+  .days-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .day-chip { display: flex; align-items: center; gap: 5px; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 999px; padding: 5px 10px; font-size: 11.5px; cursor: pointer; }
+  .day-chip input { width: auto; margin: 0; }
+  .strategy-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border-soft); }
+  .analysis-result { display: none; margin-top: 18px; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; }
+  .analysis-result.show { display: block; }
+  .analysis-score-row { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
+  .analysis-score-circle { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-weight: 600; font-size: 17px; flex-shrink: 0; border: 3px solid var(--border); }
+  .analysis-verdict { font-size: 13px; font-weight: 500; }
+  .analysis-list { margin: 10px 0 0; padding: 0; list-style: none; }
+  .analysis-list li { padding: 6px 0 6px 20px; position: relative; font-size: 12.5px; color: var(--text-dim); }
+  .analysis-list.critical li::before { content: "✕"; position: absolute; left: 0; color: var(--down); }
+  .analysis-list.warnings li::before { content: "!"; position: absolute; left: 2px; color: var(--test); font-weight: 700; }
+  .analysis-list.positives li::before { content: "✓"; position: absolute; left: 0; color: var(--live); }
+  .analysis-group-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-top: 14px; }
+  .pending-card { display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--test); background: rgba(217,180,90,0.06); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 10px; }
+  .pending-card .meta { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
@@ -436,30 +462,137 @@
 
     <div id="profiles" class="tab-content">
       <div class="panel">
-        <h2>Créer un profil / scénario</h2>
-        <p class="panel-desc">Réglages du bot pour un couple exchange/symbole (ou "*" pour tout l'exchange). Enregistrez plusieurs scénarios et activez celui qui correspond à la conjoncture.</p>
-        <form id="profile-form" class="profile-form">
-          <div class="field"><label>Nom du profil</label><input type="text" name="name" placeholder="Ex: Prudent BTC" required></div>
-          <div class="field"><label>Exchange</label>
-            <select name="exchange">
-              <option value="bybit">Bybit</option><option value="kraken">Kraken</option>
-              <option value="okx">OKX</option><option value="coinbase">Coinbase</option>
-              <option value="bitpanda">Bitpanda</option><option value="oanda">OANDA</option>
-              <option value="mt5">MT5</option>
-            </select>
+        <h2>Configurateur de stratégie</h2>
+        <p class="panel-desc">Tous les paramètres envisageables pour une stratégie de trading automatisée. Les champs marqués <span class="badge live">appliqué</span> sont réellement vérifiés par le bot avant chaque ordre ; ceux marqués <span class="badge">indicatif</span> nourrissent l'analyse ci-dessous mais ne bloquent pas encore automatiquement un ordre.</p>
+
+        <form id="profile-form">
+          <div class="strategy-section">
+            <h3>Identité &amp; style</h3>
+            <div class="profile-form">
+              <div class="field"><label>Nom du profil</label><input type="text" name="name" placeholder="Ex: Prudent BTC swing" required></div>
+              <div class="field"><label>Plateforme</label>
+                <select name="exchange">
+                  <option value="bybit">Bybit</option><option value="kraken">Kraken</option>
+                  <option value="okx">OKX</option><option value="coinbase">Coinbase</option>
+                  <option value="bitpanda">Bitpanda</option><option value="oanda">OANDA</option>
+                  <option value="mt5">MT5</option>
+                </select>
+              </div>
+              <div class="field"><label>Symbole (ou * pour tous)</label><input type="text" class="mono-input" name="symbol" placeholder="BTCUSDT ou *" value="*"></div>
+              <div class="field"><label>Type de marché <span class="badge">indicatif</span></label>
+                <select name="market_type"><option value="">—</option><option value="spot">Spot</option><option value="perpetual">Perpétuel / futures</option><option value="forex">Forex</option></select>
+              </div>
+              <div class="field"><label>Style de trading <span class="badge">indicatif</span></label>
+                <select name="trading_style"><option value="">—</option><option value="scalping">Scalping</option><option value="day_trading">Day trading</option><option value="swing">Swing</option><option value="position">Position</option></select>
+              </div>
+              <div class="field"><label>Timeframe principal <span class="badge">indicatif</span></label>
+                <select name="timeframe"><option value="">—</option><option value="1m">1 min</option><option value="5m">5 min</option><option value="15m">15 min</option><option value="1h">1 heure</option><option value="4h">4 heures</option><option value="1d">1 jour</option></select>
+              </div>
+              <div class="field"><label>Direction <span class="badge live">appliqué</span></label>
+                <select name="direction"><option value="both">Achat et vente</option><option value="long_only">Achat uniquement</option><option value="short_only">Vente uniquement</option></select>
+              </div>
+              <div class="field"><label class="chk"><input type="checkbox" name="is_active"> Activer ce profil immédiatement</label></div>
+            </div>
           </div>
-          <div class="field"><label>Symbole (ou * pour tous)</label><input type="text" class="mono-input" name="symbol" placeholder="BTCUSDT ou *" value="*"></div>
-          <div class="field"><label>Stop-loss (%)</label><input type="number" step="0.1" name="stop_loss_pct" placeholder="Ex: 2"></div>
-          <div class="field"><label>Take-profit (%)</label><input type="number" step="0.1" name="take_profit_pct" placeholder="Ex: 4"></div>
-          <div class="field"><label>Perte max/jour (nb ordres perdants)</label><input type="number" name="max_daily_loss" placeholder="Ex: 3"></div>
-          <div class="field"><label>Heure de début (UTC, 0-23)</label><input type="number" min="0" max="23" name="trading_start_hour" placeholder="Ex: 7"></div>
-          <div class="field"><label>Heure de fin (UTC, 0-23)</label><input type="number" min="0" max="23" name="trading_end_hour" placeholder="Ex: 21"></div>
-          <div class="field"><label>Liste blanche de symboles</label><input type="text" class="mono-input" name="symbol_whitelist" placeholder="BTCUSDT,ETHUSDT"></div>
-          <div class="field"><label>Trades simultanés max</label><input type="number" name="max_concurrent_trades" placeholder="Ex: 2"></div>
-          <div class="field"><label><input type="checkbox" name="is_active"> Activer immédiatement</label></div>
-          <div class="field"><button type="submit" class="btn">Enregistrer le profil</button></div>
+
+          <div class="strategy-section">
+            <h3>Taille de position &amp; levier <span class="badge">indicatif</span></h3>
+            <div class="profile-form">
+              <div class="field"><label>Type de dimensionnement</label>
+                <select name="position_size_type"><option value="">—</option><option value="fixed">Quantité fixe</option><option value="percent_capital">% du capital</option><option value="risk_based">Basé sur le risque</option></select>
+              </div>
+              <div class="field"><label>Valeur du dimensionnement</label><input type="number" step="any" name="position_size_value" placeholder="Ex: 0.001 ou 5"></div>
+              <div class="field range-field"><label>Risque par trade (% du capital) : <span class="range-val" id="val-risk_per_trade_pct">1</span>%</label>
+                <input type="range" name="risk_per_trade_pct" min="0.1" max="10" step="0.1" value="1"></div>
+              <div class="field range-field"><label>Levier : <span class="range-val" id="val-leverage">1</span>x</label>
+                <input type="range" name="leverage" min="1" max="125" step="1" value="1"></div>
+              <div class="field"><label>Mode de marge</label>
+                <select name="margin_mode"><option value="">—</option><option value="isolated">Isolée</option><option value="cross">Croisée</option></select>
+              </div>
+            </div>
+          </div>
+
+          <div class="strategy-section">
+            <h3>Stop-loss / Take-profit / Trailing <span class="badge live">SL·TP appliqués</span></h3>
+            <div class="profile-form">
+              <div class="field range-field"><label>Stop-loss : <span class="range-val" id="val-stop_loss_pct">2</span>%</label>
+                <input type="range" name="stop_loss_pct" min="0.1" max="20" step="0.1" value="2"></div>
+              <div class="field range-field"><label>Take-profit : <span class="range-val" id="val-take_profit_pct">4</span>%</label>
+                <input type="range" name="take_profit_pct" min="0.1" max="50" step="0.1" value="4"></div>
+              <div class="field"><label class="chk"><input type="checkbox" name="trailing_stop_enabled" class="toggle-reveal" data-target="trailing_stop_pct-wrap"> Trailing stop actif</label></div>
+              <div class="field range-field" id="trailing_stop_pct-wrap" style="display:none"><label>Distance du trailing stop : <span class="range-val" id="val-trailing_stop_pct">1.5</span>%</label>
+                <input type="range" name="trailing_stop_pct" min="0.1" max="10" step="0.1" value="1.5"></div>
+              <div class="field"><label class="chk"><input type="checkbox" name="breakeven_enabled" class="toggle-reveal" data-target="breakeven_trigger_pct-wrap"> Passage au seuil de rentabilité (breakeven)</label></div>
+              <div class="field" id="breakeven_trigger_pct-wrap" style="display:none"><label>Déclenché après (% de gain)</label><input type="number" step="0.1" name="breakeven_trigger_pct" placeholder="Ex: 1"></div>
+              <div class="field"><label class="chk"><input type="checkbox" name="partial_tp_enabled" class="toggle-reveal" data-target="partial-tp-wrap"> Prise de profit partielle</label></div>
+              <div class="field" id="partial-tp-wrap" style="display:none">
+                <label>TP1 (%) puis % de la position clôturée</label>
+                <div style="display:flex;gap:8px">
+                  <input type="number" step="0.1" name="partial_tp1_pct" placeholder="Ex: 2">
+                  <input type="number" step="1" name="partial_tp1_size_pct" placeholder="Ex: 50 (%)">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="strategy-section">
+            <h3>Coupe-circuits &amp; limites</h3>
+            <div class="profile-form">
+              <div class="field"><label>Perte max / jour (nb ordres perdants) <span class="badge live">appliqué</span></label><input type="number" name="max_daily_loss" placeholder="Ex: 3"></div>
+              <div class="field"><label>Trades max / jour <span class="badge live">appliqué</span></label><input type="number" name="max_trades_per_day" placeholder="Ex: 5"></div>
+              <div class="field"><label>Trades simultanés max <span class="badge live">appliqué</span></label><input type="number" name="max_concurrent_trades" placeholder="Ex: 2"></div>
+              <div class="field"><label>Pause après N pertes consécutives <span class="badge live">appliqué</span></label><input type="number" name="consecutive_losses_pause" placeholder="Ex: 3"></div>
+              <div class="field"><label>Perte max / jour (% capital) <span class="badge">indicatif</span></label><input type="number" step="0.1" name="max_daily_loss_pct" placeholder="Ex: 5"></div>
+              <div class="field"><label>Perte max / semaine (% capital) <span class="badge">indicatif</span></label><input type="number" step="0.1" name="max_weekly_loss_pct" placeholder="Ex: 10"></div>
+              <div class="field"><label>Drawdown max (% capital) <span class="badge">indicatif</span></label><input type="number" step="0.1" name="max_drawdown_pct" placeholder="Ex: 15"></div>
+            </div>
+          </div>
+
+          <div class="strategy-section">
+            <h3>Filtres de marché <span class="badge live">appliqués</span></h3>
+            <div class="profile-form">
+              <div class="field"><label>Heure de début (UTC, 0-23)</label><input type="number" min="0" max="23" name="trading_start_hour" placeholder="Ex: 7"></div>
+              <div class="field"><label>Heure de fin (UTC, 0-23)</label><input type="number" min="0" max="23" name="trading_end_hour" placeholder="Ex: 21"></div>
+              <div class="field"><label>Liste blanche de symboles</label><input type="text" class="mono-input" name="symbol_whitelist" placeholder="BTCUSDT,ETHUSDT"></div>
+              <div class="field">
+                <label>Jours de trading</label>
+                <div class="days-row">
+                  <label class="day-chip"><input type="checkbox" name="day_mon" value="mon">Lun</label>
+                  <label class="day-chip"><input type="checkbox" name="day_tue" value="tue">Mar</label>
+                  <label class="day-chip"><input type="checkbox" name="day_wed" value="wed">Mer</label>
+                  <label class="day-chip"><input type="checkbox" name="day_thu" value="thu">Jeu</label>
+                  <label class="day-chip"><input type="checkbox" name="day_fri" value="fri">Ven</label>
+                  <label class="day-chip"><input type="checkbox" name="day_sat" value="sat">Sam</label>
+                  <label class="day-chip"><input type="checkbox" name="day_sun" value="sun">Dim</label>
+                </div>
+              </div>
+              <div class="field"><label>Filtre de volume minimum <span class="badge">indicatif</span></label><input type="number" step="any" name="min_volume_filter" placeholder="Optionnel"></div>
+              <div class="field"><label class="chk"><input type="checkbox" name="trend_filter_enabled"> Ne trader que dans le sens de la tendance <span class="badge">indicatif</span></label></div>
+            </div>
+          </div>
+
+          <div class="strategy-section">
+            <h3>Sécurité opérationnelle <span class="badge live">appliqué</span></h3>
+            <div class="profile-form">
+              <div class="field"><label class="chk"><input type="checkbox" name="confirm_before_execution"> Validation manuelle obligatoire avant chaque ordre (file d'attente dans le dashboard)</label></div>
+            </div>
+          </div>
+
+          <div class="strategy-actions">
+            <button type="button" id="analyze-btn" class="btn ghost">Analyse</button>
+            <button type="submit" class="btn">Valider la stratégie</button>
+          </div>
         </form>
+
+        <div id="analysis-result" class="analysis-result"></div>
       </div>
+
+      <div class="panel">
+        <h2>Ordres en attente de validation manuelle</h2>
+        <p class="panel-desc">Ordres bloqués par un profil "confirmation obligatoire" — approuvez ou rejetez avant qu'ils n'expirent d'intérêt.</p>
+        <div id="pending-orders-list"></div>
+      </div>
+
       <div class="panel">
         <h2>Profils enregistrés</h2>
         <div id="profiles-list"></div>
@@ -677,6 +810,11 @@ function renderSignalRail() {
   }
 }
 
+function fmtGauge(label, value, suffix) {
+  return value !== null && value !== undefined && value !== ""
+    ? `<div class="gauge"><div class="gauge-label">${label}</div><div class="gauge-val">${value}${suffix || ""}</div></div>` : "";
+}
+
 async function loadProfiles() {
   allProfiles = await fetchJSON("/api/profiles");
   const container = document.getElementById("profiles-list");
@@ -685,10 +823,10 @@ async function loadProfiles() {
     const div = document.createElement("div");
     div.className = "profile-card";
     const s = p.settings;
-    const sl = s.stop_loss_pct, tp = s.take_profit_pct;
     div.innerHTML = `
       <div class="profile-card-top">
-        <div><strong>${p.name}</strong> <span class="badge ${p.is_active ? 'live' : ''}">${p.is_active ? "ACTIF" : "inactif"}</span></div>
+        <div><strong>${p.name}</strong> <span class="badge ${p.is_active ? 'live' : ''}">${p.is_active ? "ACTIF" : "inactif"}</span>
+          ${s.trading_style ? `<span class="badge">${s.trading_style}</span>` : ""} ${s.timeframe ? `<span class="badge">${s.timeframe}</span>` : ""}</div>
         <div>
           ${p.is_active ? `<button class="btn ghost deactivate" data-id="${p.id}">Désactiver</button>` : `<button class="btn activate" data-id="${p.id}">Activer</button>`}
           <button class="btn danger delete" data-id="${p.id}">Supprimer</button>
@@ -696,12 +834,16 @@ async function loadProfiles() {
       </div>
       <div class="exchange-symbol">${p.exchange} / ${p.symbol}</div>
       <div class="gauge-row">
-        ${sl ? `<div class="gauge"><div class="gauge-label">Stop-loss</div><div class="gauge-bar"><div class="gauge-bar-fill" style="width:${Math.min(sl*10,100)}%;background:var(--down)"></div></div><div class="gauge-val">-${sl}%</div></div>` : ""}
-        ${tp ? `<div class="gauge"><div class="gauge-label">Take-profit</div><div class="gauge-bar"><div class="gauge-bar-fill" style="width:${Math.min(tp*10,100)}%;background:var(--live)"></div></div><div class="gauge-val">+${tp}%</div></div>` : ""}
-        ${s.max_daily_loss ? `<div class="gauge"><div class="gauge-label">Coupe-circuit</div><div class="gauge-val">${s.max_daily_loss} pertes/j max</div></div>` : ""}
+        ${s.stop_loss_pct ? `<div class="gauge"><div class="gauge-label">Stop-loss</div><div class="gauge-bar"><div class="gauge-bar-fill" style="width:${Math.min(s.stop_loss_pct*10,100)}%;background:var(--down)"></div></div><div class="gauge-val">-${s.stop_loss_pct}%</div></div>` : ""}
+        ${s.take_profit_pct ? `<div class="gauge"><div class="gauge-label">Take-profit</div><div class="gauge-bar"><div class="gauge-bar-fill" style="width:${Math.min(s.take_profit_pct*10,100)}%;background:var(--live)"></div></div><div class="gauge-val">+${s.take_profit_pct}%</div></div>` : ""}
+        ${fmtGauge("Levier", s.leverage, "x")}
+        ${fmtGauge("Risque/trade", s.risk_per_trade_pct, "%")}
+        ${fmtGauge("Coupe-circuit", s.max_daily_loss, " pertes/j max")}
         ${(s.trading_start_hour !== null && s.trading_start_hour !== undefined) ? `<div class="gauge"><div class="gauge-label">Plage horaire (UTC)</div><div class="gauge-val">${s.trading_start_hour}h–${s.trading_end_hour}h</div></div>` : ""}
-        ${s.max_concurrent_trades ? `<div class="gauge"><div class="gauge-label">Trades simultanés</div><div class="gauge-val">max ${s.max_concurrent_trades}</div></div>` : ""}
+        ${fmtGauge("Trades simultanés", s.max_concurrent_trades, " max")}
+        ${fmtGauge("Trades/jour", s.max_trades_per_day, " max")}
         ${s.symbol_whitelist ? `<div class="gauge"><div class="gauge-label">Symboles autorisés</div><div class="gauge-val">${s.symbol_whitelist}</div></div>` : ""}
+        ${s.confirm_before_execution ? `<div class="gauge"><div class="gauge-label">Sécurité</div><div class="gauge-val">Validation manuelle</div></div>` : ""}
       </div>
     `;
     container.appendChild(div);
@@ -712,22 +854,133 @@ async function loadProfiles() {
   renderSignalRail();
 }
 
+async function loadPendingOrders() {
+  const pending = await fetchJSON("/api/pending-orders");
+  const container = document.getElementById("pending-orders-list");
+  container.innerHTML = pending.length ? "" : '<p style="color:var(--muted);font-size:12.5px">Aucun ordre en attente.</p>';
+  for (const o of pending) {
+    const div = document.createElement("div");
+    div.className = "pending-card";
+    div.innerHTML = `
+      <div>
+        <strong>${o.side === "buy" ? "Achat" : "Vente"} ${o.symbol}</strong> sur ${o.exchange} — qté ${o.quantity}
+        <div class="meta">${new Date(o.created_at).toLocaleString("fr-FR")} · profil "${o.profile_name}"</div>
+      </div>
+      <div>
+        <button class="btn approve" data-id="${o.id}">Approuver</button>
+        <button class="btn danger reject" data-id="${o.id}">Rejeter</button>
+      </div>
+    `;
+    container.appendChild(div);
+  }
+  container.querySelectorAll(".approve").forEach(b => b.addEventListener("click", async () => {
+    await fetchJSON(`/api/pending-orders/${b.dataset.id}/approve`, { method: "POST" });
+    loadPendingOrders(); loadOrders();
+  }));
+  container.querySelectorAll(".reject").forEach(b => b.addEventListener("click", async () => {
+    await fetchJSON(`/api/pending-orders/${b.dataset.id}/reject`, { method: "POST" });
+    loadPendingOrders();
+  }));
+}
+
+// --- Sliders : affichage live de la valeur ---
+document.querySelectorAll('#profile-form input[type=range]').forEach(input => {
+  const out = document.getElementById("val-" + input.name);
+  if (out) input.addEventListener("input", () => { out.textContent = input.value; });
+});
+// --- Cases à cocher qui révèlent des champs dépendants ---
+document.querySelectorAll('.toggle-reveal').forEach(cb => {
+  cb.addEventListener("change", () => {
+    const target = document.getElementById(cb.dataset.target);
+    if (target) target.style.display = cb.checked ? "block" : "none";
+  });
+});
+
+function collectStrategyPayload() {
+  const form = document.getElementById("profile-form");
+  const fd = new FormData(form);
+  const toNum = (v) => (v === "" || v === null || v === undefined ? null : Number(v));
+  const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].filter(d => fd.get("day_" + d));
+  return {
+    name: fd.get("name") || "(sans nom)",
+    exchange: fd.get("exchange"), symbol: fd.get("symbol") || "*",
+    is_active: fd.get("is_active") === "on",
+    market_type: fd.get("market_type") || null,
+    trading_style: fd.get("trading_style") || null,
+    timeframe: fd.get("timeframe") || null,
+    direction: fd.get("direction") || "both",
+    position_size_type: fd.get("position_size_type") || null,
+    position_size_value: toNum(fd.get("position_size_value")),
+    risk_per_trade_pct: toNum(fd.get("risk_per_trade_pct")),
+    leverage: toNum(fd.get("leverage")),
+    margin_mode: fd.get("margin_mode") || null,
+    stop_loss_pct: toNum(fd.get("stop_loss_pct")),
+    take_profit_pct: toNum(fd.get("take_profit_pct")),
+    trailing_stop_enabled: fd.get("trailing_stop_enabled") === "on",
+    trailing_stop_pct: toNum(fd.get("trailing_stop_pct")),
+    breakeven_enabled: fd.get("breakeven_enabled") === "on",
+    breakeven_trigger_pct: toNum(fd.get("breakeven_trigger_pct")),
+    partial_tp_enabled: fd.get("partial_tp_enabled") === "on",
+    partial_tp1_pct: toNum(fd.get("partial_tp1_pct")),
+    partial_tp1_size_pct: toNum(fd.get("partial_tp1_size_pct")),
+    max_daily_loss: toNum(fd.get("max_daily_loss")),
+    max_daily_loss_pct: toNum(fd.get("max_daily_loss_pct")),
+    max_weekly_loss_pct: toNum(fd.get("max_weekly_loss_pct")),
+    max_drawdown_pct: toNum(fd.get("max_drawdown_pct")),
+    max_trades_per_day: toNum(fd.get("max_trades_per_day")),
+    max_concurrent_trades: toNum(fd.get("max_concurrent_trades")),
+    consecutive_losses_pause: toNum(fd.get("consecutive_losses_pause")),
+    trading_start_hour: toNum(fd.get("trading_start_hour")),
+    trading_end_hour: toNum(fd.get("trading_end_hour")),
+    trading_days: days.length ? days.join(",") : null,
+    symbol_whitelist: fd.get("symbol_whitelist") || null,
+    min_volume_filter: toNum(fd.get("min_volume_filter")),
+    trend_filter_enabled: fd.get("trend_filter_enabled") === "on",
+    confirm_before_execution: fd.get("confirm_before_execution") === "on",
+  };
+}
+
+function renderAnalysis(result) {
+  const box = document.getElementById("analysis-result");
+  box.className = "analysis-result show";
+  const color = result.score >= 80 ? "var(--live)" : result.score >= 50 ? "var(--test)" : "var(--down)";
+  const listHtml = (title, cls, items) => items.length
+    ? `<div class="analysis-group-title">${title}</div><ul class="analysis-list ${cls}">${items.map(i => `<li>${i}</li>`).join("")}</ul>` : "";
+  box.innerHTML = `
+    <div class="analysis-score-row">
+      <div class="analysis-score-circle mono" style="border-color:${color};color:${color}">${result.score}</div>
+      <div class="analysis-verdict">${result.verdict}</div>
+    </div>
+    ${listHtml("Points critiques", "critical", result.critical)}
+    ${listHtml("Points d'attention", "warnings", result.warnings)}
+    ${listHtml("Points positifs", "positives", result.positives)}
+    <p style="color:var(--muted);font-size:11px;margin-top:14px">Analyse générée par un moteur de règles de gestion du risque local — ce n'est pas un conseil financier et ne garantit aucun résultat.</p>
+  `;
+}
+
+document.getElementById("analyze-btn").addEventListener("click", async () => {
+  const payload = collectStrategyPayload();
+  const box = document.getElementById("analysis-result");
+  box.className = "analysis-result show";
+  box.innerHTML = '<p style="color:var(--muted)">Analyse en cours…</p>';
+  try {
+    const result = await fetchJSON("/api/analyze-strategy", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+    });
+    renderAnalysis(result);
+  } catch (err) {
+    box.innerHTML = `<p style="color:var(--down)">Erreur: ${err.message}</p>`;
+  }
+});
+
 document.getElementById("profile-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const fd = new FormData(e.target);
-  const toNum = (v) => (v === "" || v === null ? null : Number(v));
+  const payload = collectStrategyPayload();
   await fetchJSON("/api/profiles", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name: fd.get("name"), exchange: fd.get("exchange"), symbol: fd.get("symbol") || "*",
-      is_active: fd.get("is_active") === "on",
-      stop_loss_pct: toNum(fd.get("stop_loss_pct")), take_profit_pct: toNum(fd.get("take_profit_pct")),
-      max_daily_loss: toNum(fd.get("max_daily_loss")), trading_start_hour: toNum(fd.get("trading_start_hour")),
-      trading_end_hour: toNum(fd.get("trading_end_hour")), symbol_whitelist: fd.get("symbol_whitelist") || null,
-      max_concurrent_trades: toNum(fd.get("max_concurrent_trades")),
-    }),
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
   });
   e.target.reset();
+  document.getElementById("analysis-result").className = "analysis-result";
   loadProfiles();
 });
 
@@ -921,7 +1174,7 @@ document.getElementById("terminal-form").addEventListener("submit", async (e) =>
 });
 
 async function refreshAll() {
-  await Promise.all([loadOrders(), loadStrategies()]);
+  await Promise.all([loadOrders(), loadStrategies(), loadPendingOrders()]);
 }
 
 (async function init() {

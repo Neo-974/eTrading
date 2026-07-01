@@ -63,3 +63,19 @@ def init_db():
                 updated_at TEXT NOT NULL
             )"""
         )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS pending_orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                exchange TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                side TEXT NOT NULL,
+                quantity REAL NOT NULL,
+                order_type TEXT NOT NULL,
+                price REAL,
+                profile_name TEXT,
+                status TEXT NOT NULL DEFAULT 'pending',
+                resolved_at TEXT,
+                resolution_detail TEXT
+            )"""
+        )

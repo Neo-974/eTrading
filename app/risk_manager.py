@@ -52,6 +52,62 @@ def check_symbol_whitelist(settings: dict, symbol: str) -> Optional[str]:
     return None
 
 
+def check_direction(settings: dict, side: str) -> Optional[str]:
+    direction = settings.get("direction")
+    if not direction or direction == "both":
+        return None
+    if direction == "long_only" and side.lower() != "buy":
+        return "Profil configuré en 'Long uniquement' — ordre de vente refusé"
+    if direction == "short_only" and side.lower() != "sell":
+        return "Profil configuré en 'Short uniquement' — ordre d'achat refusé"
+    return None
+
+
+def check_trading_days(settings: dict) -> Optional[str]:
+    days = settings.get("trading_days")
+    if not days:
+        return None
+    allowed = [d.strip().lower() for d in days.split(",") if d.strip()]
+    if not allowed:
+        return None
+    today = datetime.now(timezone.utc).strftime("%a").lower()  # 'mon', 'tue', ...
+    if today not in allowed:
+        return f"Trading désactivé ce jour ({today}) par le profil"
+    return None
+
+
+def check_max_trades_per_day(settings: dict, exchange: str) -> Optional[str]:
+    max_per_day = settings.get("max_trades_per_day")
+    if not max_per_day:
+        return None
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    with get_conn() as conn:
+        count = conn.execute(
+            "SELECT COUNT(*) as c FROM orders WHERE exchange=? AND status='executed' AND created_at LIKE ?",
+            (exchange, f"{today}%"),
+        ).fetchone()["c"]
+    if count >= int(max_per_day):
+        return f"Nombre max de trades aujourd'hui atteint ({count}/{max_per_day})"
+    return None
+
+
+def check_consecutive_losses(settings: dict, exchange: str) -> Optional[str]:
+    max_consecutive = settings.get("consecutive_losses_pause")
+    if not max_consecutive:
+        return None
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT detail FROM orders WHERE exchange=? AND status='executed' ORDER BY id DESC LIMIT ?",
+            (exchange, int(max_consecutive)),
+        ).fetchall()
+    if len(rows) < int(max_consecutive):
+        return None
+    # Approximation : basé sur le mot-clé 'loss' dans le détail journalisé (pas de P&L réel suivi).
+    if all("loss" in (r["detail"] or "").lower() for r in rows):
+        return f"Pause automatique : {max_consecutive} pertes consécutives détectées"
+    return None
+
+
 def check_daily_loss_limit(settings: dict, exchange: str) -> Optional[str]:
     max_daily_loss = settings.get("max_daily_loss")
     if not max_daily_loss:
@@ -119,21 +175,19 @@ def evaluate(exchange: str, symbol: str, side: str, price: Optional[float] = Non
 
     settings = profile["settings"]
 
-    reason = check_trading_hours(settings)
-    if reason:
-        return False, reason, profile, None, None
-
-    reason = check_symbol_whitelist(settings, symbol)
-    if reason:
-        return False, reason, profile, None, None
-
-    reason = check_daily_loss_limit(settings, exchange)
-    if reason:
-        return False, reason, profile, None, None
-
-    reason = check_max_concurrent_trades(settings, exchange, symbol)
-    if reason:
-        return False, reason, profile, None, None
+    for check_fn, args in (
+        (check_direction, (settings, side)),
+        (check_trading_hours, (settings,)),
+        (check_trading_days, (settings,)),
+        (check_symbol_whitelist, (settings, symbol)),
+        (check_daily_loss_limit, (settings, exchange)),
+        (check_max_trades_per_day, (settings, exchange)),
+        (check_consecutive_losses, (settings, exchange)),
+        (check_max_concurrent_trades, (settings, exchange, symbol)),
+    ):
+        reason = check_fn(*args)
+        if reason:
+            return False, reason, profile, None, None
 
     sl, tp = compute_sl_tp(settings, side, price)
     return True, None, profile, sl, tp
