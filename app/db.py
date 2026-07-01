@@ -51,3 +51,15 @@ def init_db():
                 updated_at TEXT NOT NULL
             )"""
         )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS bot_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                exchange TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 0,
+                settings_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )"""
+        )

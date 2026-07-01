@@ -14,7 +14,7 @@
   header { padding: 20px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
   header h1 { margin: 0; font-size: 18px; }
   .muted { color: var(--muted); font-size: 13px; }
-  nav { display: flex; gap: 4px; padding: 12px 28px 0; border-bottom: 1px solid var(--border); }
+  nav { display: flex; gap: 4px; padding: 12px 28px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
   nav button { background: none; border: none; color: var(--muted); padding: 10px 16px; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; }
   nav button.active { color: var(--text); border-bottom-color: var(--accent); }
   main { padding: 24px 28px; }
@@ -32,10 +32,19 @@
   .status-executed { color: var(--green); }
   .status-error { color: var(--red); }
   .status-ignored { color: var(--amber); }
-  form.keys-form { display: grid; grid-template-columns: 140px 1fr 1fr 100px 100px; gap: 10px; align-items: center; margin-bottom: 10px; }
-  input[type=text], input[type=password] { background: #0d0f14; border: 1px solid var(--border); color: var(--text); padding: 8px 10px; border-radius: 6px; }
+  form.keys-form { display: grid; grid-template-columns: 110px 1fr 1fr 1fr 90px 100px; gap: 10px; align-items: center; margin-bottom: 10px; }
+  form.keys-form.no-passphrase { grid-template-columns: 110px 1fr 1fr 90px 100px; }
+  input[type=text], input[type=password], input[type=number] { background: #0d0f14; border: 1px solid var(--border); color: var(--text); padding: 8px 10px; border-radius: 6px; width: 100%; }
   button.save { background: var(--accent); color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; }
+  button.danger { background: var(--red); }
+  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
   .toggle { width: 18px; height: 18px; }
+  .profile-form { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 20px; }
+  .profile-form label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  .profile-form .field { display: flex; flex-direction: column; }
+  .profile-card { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #1d2230; color: var(--muted); }
+  .badge.active { background: rgba(62,207,142,0.15); color: var(--green); }
 </style>
 </head>
 <body>
@@ -50,6 +59,7 @@
   <button data-tab="orders">Ordres</button>
   <button data-tab="strategies">Stratégies</button>
   <button data-tab="keys">Clés API</button>
+  <button data-tab="profiles">Profils / Réglages</button>
 </nav>
 
 <main>
@@ -63,7 +73,10 @@
     </div>
     <div class="panel">
       <h2>Plateformes disponibles</h2>
-      <p class="muted">Bybit (spot/dérivés, testnet + réel) · Kraken (spot) · MT4/MT5 (à venir)</p>
+      <p class="muted">
+        Crypto — Bybit, Kraken, OKX, Coinbase, Bitpanda (testnet/dry-run + réel)<br>
+        Forex — OANDA (pratique + réel), MT4/MT5 via MetaApi (à venir)
+      </p>
     </div>
   </div>
 
@@ -91,15 +104,47 @@
   <div id="keys" class="tab-content">
     <div class="panel">
       <h2>Clés API</h2>
-      <p class="muted">Les clés sont chiffrées localement et ne sont jamais réaffichées en clair.</p>
+      <p class="muted">Les clés sont chiffrées localement et ne sont jamais réaffichées en clair. Pour OANDA : "API Key" = jeton d'accès, "API Secret" = identifiant de compte.</p>
       <div id="keys-forms"></div>
+    </div>
+  </div>
+
+  <div id="profiles" class="tab-content">
+    <div class="panel">
+      <h2>Créer un profil / scénario</h2>
+      <p class="muted">Un profil regroupe tous les réglages du bot pour un couple exchange/symbole (ou "*" pour tout l'exchange). Enregistrez plusieurs scénarios (ex: "Agressif BTC", "Prudent forex nuit") et activez celui que vous voulez selon la conjoncture.</p>
+      <form id="profile-form" class="profile-form">
+        <div class="field"><label>Nom du profil</label><input type="text" name="name" placeholder="Ex: Prudent BTC" required></div>
+        <div class="field"><label>Exchange</label>
+          <select name="exchange">
+            <option value="bybit">Bybit</option><option value="kraken">Kraken</option>
+            <option value="okx">OKX</option><option value="coinbase">Coinbase</option>
+            <option value="bitpanda">Bitpanda</option><option value="oanda">OANDA</option>
+            <option value="mt5">MT5</option>
+          </select>
+        </div>
+        <div class="field"><label>Symbole (ou * pour tous)</label><input type="text" name="symbol" placeholder="BTCUSDT ou *" value="*"></div>
+        <div class="field"><label>Stop-loss (%)</label><input type="number" step="0.1" name="stop_loss_pct" placeholder="Ex: 2"></div>
+        <div class="field"><label>Take-profit (%)</label><input type="number" step="0.1" name="take_profit_pct" placeholder="Ex: 4"></div>
+        <div class="field"><label>Perte max/jour (nb ordres perdants)</label><input type="number" name="max_daily_loss" placeholder="Ex: 3"></div>
+        <div class="field"><label>Heure de début (UTC, 0-23)</label><input type="number" min="0" max="23" name="trading_start_hour" placeholder="Ex: 7"></div>
+        <div class="field"><label>Heure de fin (UTC, 0-23)</label><input type="number" min="0" max="23" name="trading_end_hour" placeholder="Ex: 21"></div>
+        <div class="field"><label>Liste blanche de symboles (séparés par virgule)</label><input type="text" name="symbol_whitelist" placeholder="BTCUSDT,ETHUSDT"></div>
+        <div class="field"><label>Trades simultanés max</label><input type="number" name="max_concurrent_trades" placeholder="Ex: 2"></div>
+        <div class="field"><label><input type="checkbox" name="is_active"> Activer immédiatement</label></div>
+        <div class="field"><button type="submit" class="save">Enregistrer le profil</button></div>
+      </form>
+    </div>
+    <div class="panel">
+      <h2>Profils enregistrés</h2>
+      <div id="profiles-list"></div>
     </div>
   </div>
 
 </main>
 
 <script>
-const EXCHANGES = ["bybit", "kraken", "mt5"];
+const EXCHANGES = ["bybit", "kraken", "okx", "coinbase", "bitpanda", "oanda", "mt5"];
 
 document.querySelectorAll("nav button").forEach(btn => {
   btn.addEventListener("click", () => {
@@ -118,14 +163,10 @@ async function fetchJSON(url, opts) {
 
 async function loadOrders() {
   const orders = await fetchJSON("/api/orders");
-  const total = orders.length;
-  const executed = orders.filter(o => o.status === "executed").length;
-  const errors = orders.filter(o => o.status === "error").length;
-  const ignored = orders.filter(o => o.status === "ignored").length;
-  document.getElementById("stat-total").textContent = total;
-  document.getElementById("stat-executed").textContent = executed;
-  document.getElementById("stat-errors").textContent = errors;
-  document.getElementById("stat-ignored").textContent = ignored;
+  document.getElementById("stat-total").textContent = orders.length;
+  document.getElementById("stat-executed").textContent = orders.filter(o => o.status === "executed").length;
+  document.getElementById("stat-errors").textContent = orders.filter(o => o.status === "error").length;
+  document.getElementById("stat-ignored").textContent = orders.filter(o => o.status === "ignored").length;
 
   const body = document.getElementById("orders-body");
   body.innerHTML = orders.length ? "" : '<tr><td colspan="7" class="muted">Aucun ordre pour le moment.</td></tr>';
@@ -162,13 +203,18 @@ async function loadKeys() {
   const container = document.getElementById("keys-forms");
   container.innerHTML = "";
   for (const k of keys) {
+    if (k.exchange === "okx_passphrase") continue;
+    const isOkx = k.exchange === "okx";
+    const secretLabel = k.exchange === "oanda" ? "ID de compte" : (k.exchange === "mt5" ? "Token MetaApi" : "API Secret");
+    const keyLabel = k.exchange === "oanda" ? "Jeton d'accès" : (k.exchange === "mt5" ? "Account ID" : "API Key");
     const form = document.createElement("form");
-    form.className = "keys-form";
+    form.className = "keys-form" + (isOkx ? "" : " no-passphrase");
     form.innerHTML = `
       <strong>${k.exchange}${k.configured ? " ✅" : ""}</strong>
-      <input type="text" placeholder="API Key" name="api_key" ${k.exchange === "mt5" ? 'data-mt5="1"' : ""}>
-      <input type="password" placeholder="${k.exchange === 'mt5' ? 'Token MetaApi' : 'API Secret'}" name="api_secret">
-      <label class="muted"><input type="checkbox" name="testnet" ${k.testnet === undefined || k.testnet ? "checked" : ""}> Testnet</label>
+      <input type="text" placeholder="${keyLabel}" name="api_key">
+      <input type="password" placeholder="${secretLabel}" name="api_secret">
+      ${isOkx ? '<input type="password" placeholder="Passphrase OKX" name="okx_passphrase">' : ""}
+      <label class="muted"><input type="checkbox" name="testnet" ${k.testnet === undefined || k.testnet ? "checked" : ""}> Testnet/Dry-run</label>
       <button type="submit" class="save">Enregistrer</button>
     `;
     form.addEventListener("submit", async (e) => {
@@ -181,6 +227,7 @@ async function loadKeys() {
           api_key: fd.get("api_key"),
           api_secret: fd.get("api_secret"),
           testnet: fd.get("testnet") === "on",
+          okx_passphrase: fd.get("okx_passphrase") || null,
         }),
       });
       loadKeys();
@@ -189,11 +236,80 @@ async function loadKeys() {
   }
 }
 
+async function loadProfiles() {
+  const profiles = await fetchJSON("/api/profiles");
+  const container = document.getElementById("profiles-list");
+  container.innerHTML = profiles.length ? "" : '<p class="muted">Aucun profil enregistré.</p>';
+  for (const p of profiles) {
+    const div = document.createElement("div");
+    div.className = "profile-card";
+    const s = p.settings;
+    const details = [
+      s.stop_loss_pct ? `SL ${s.stop_loss_pct}%` : null,
+      s.take_profit_pct ? `TP ${s.take_profit_pct}%` : null,
+      s.max_daily_loss ? `Max ${s.max_daily_loss} pertes/j` : null,
+      (s.trading_start_hour !== null && s.trading_end_hour !== null) ? `${s.trading_start_hour}h-${s.trading_end_hour}h UTC` : null,
+      s.symbol_whitelist ? `Symboles: ${s.symbol_whitelist}` : null,
+      s.max_concurrent_trades ? `Max ${s.max_concurrent_trades} trades simultanés` : null,
+    ].filter(Boolean).join(" · ");
+    div.innerHTML = `
+      <div>
+        <strong>${p.name}</strong> <span class="badge ${p.is_active ? "active" : ""}">${p.is_active ? "ACTIF" : "inactif"}</span><br>
+        <span class="muted">${p.exchange} / ${p.symbol} — ${details || "aucun réglage"}</span>
+      </div>
+      <div>
+        ${p.is_active
+          ? `<button class="ghost deactivate" data-id="${p.id}">Désactiver</button>`
+          : `<button class="save activate" data-id="${p.id}">Activer</button>`}
+        <button class="danger delete" data-id="${p.id}">Supprimer</button>
+      </div>
+    `;
+    container.appendChild(div);
+  }
+  container.querySelectorAll(".activate").forEach(b => b.addEventListener("click", async () => {
+    await fetchJSON(`/api/profiles/${b.dataset.id}/activate`, { method: "POST" });
+    loadProfiles();
+  }));
+  container.querySelectorAll(".deactivate").forEach(b => b.addEventListener("click", async () => {
+    await fetchJSON(`/api/profiles/${b.dataset.id}/deactivate`, { method: "POST" });
+    loadProfiles();
+  }));
+  container.querySelectorAll(".delete").forEach(b => b.addEventListener("click", async () => {
+    await fetchJSON(`/api/profiles/${b.dataset.id}`, { method: "DELETE" });
+    loadProfiles();
+  }));
+}
+
+document.getElementById("profile-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const toNum = (v) => (v === "" || v === null ? null : Number(v));
+  await fetchJSON("/api/profiles", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: fd.get("name"),
+      exchange: fd.get("exchange"),
+      symbol: fd.get("symbol") || "*",
+      is_active: fd.get("is_active") === "on",
+      stop_loss_pct: toNum(fd.get("stop_loss_pct")),
+      take_profit_pct: toNum(fd.get("take_profit_pct")),
+      max_daily_loss: toNum(fd.get("max_daily_loss")),
+      trading_start_hour: toNum(fd.get("trading_start_hour")),
+      trading_end_hour: toNum(fd.get("trading_end_hour")),
+      symbol_whitelist: fd.get("symbol_whitelist") || null,
+      max_concurrent_trades: toNum(fd.get("max_concurrent_trades")),
+    }),
+  });
+  e.target.reset();
+  loadProfiles();
+});
+
 async function refreshAll() {
   await Promise.all([loadOrders(), loadStrategies()]);
 }
 
 loadKeys();
+loadProfiles();
 refreshAll();
 setInterval(refreshAll, 5000);
 </script>

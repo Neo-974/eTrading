@@ -1,0 +1,139 @@
+"""Vérifications de risque appliquées avant chaque ordre, selon le profil actif."""
+import json
+from datetime import datetime, timezone
+from typing import Optional
+
+from db import get_conn
+
+
+def get_active_profile(exchange: str, symbol: str) -> Optional[dict]:
+    """Cherche un profil actif pour ce couple exchange/symbole, sinon un profil
+    'global' (symbol='*') pour cet exchange, sinon None (aucune restriction)."""
+    with get_conn() as conn:
+        row = conn.execute(
+            """SELECT * FROM bot_profiles
+               WHERE exchange=? AND symbol=? AND is_active=1
+               ORDER BY id DESC LIMIT 1""",
+            (exchange, symbol.upper()),
+        ).fetchone()
+        if row is None:
+            row = conn.execute(
+                """SELECT * FROM bot_profiles
+                   WHERE exchange=? AND symbol='*' AND is_active=1
+                   ORDER BY id DESC LIMIT 1""",
+                (exchange,),
+            ).fetchone()
+    if row is None:
+        return None
+    profile = dict(row)
+    profile["settings"] = json.loads(profile["settings_json"])
+    return profile
+
+
+def check_trading_hours(settings: dict) -> Optional[str]:
+    start = settings.get("trading_start_hour")
+    end = settings.get("trading_end_hour")
+    if start is None or end is None:
+        return None
+    hour = datetime.now(timezone.utc).hour
+    in_window = (start <= hour < end) if start <= end else (hour >= start or hour < end)
+    if not in_window:
+        return f"Hors plage horaire autorisée ({start}h-{end}h UTC)"
+    return None
+
+
+def check_symbol_whitelist(settings: dict, symbol: str) -> Optional[str]:
+    whitelist = settings.get("symbol_whitelist")
+    if not whitelist:
+        return None
+    allowed = [s.strip().upper() for s in whitelist.split(",") if s.strip()]
+    if allowed and symbol.upper() not in allowed:
+        return f"Symbole {symbol} non autorisé par la liste blanche du profil"
+    return None
+
+
+def check_daily_loss_limit(settings: dict, exchange: str) -> Optional[str]:
+    max_daily_loss = settings.get("max_daily_loss")
+    if not max_daily_loss:
+        return None
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT * FROM orders WHERE exchange=? AND status='executed'
+               AND created_at LIKE ?""",
+            (exchange, f"{today}%"),
+        ).fetchall()
+    # Approximation : sans flux de prix en temps réel, on ne peut pas calculer
+    # un P&L exact ici. On compte le nombre d'ordres perdants explicitement
+    # journalisés comme tels (si le champ 'detail' le mentionne), sinon on
+    # laisse passer — le coupe-circuit précis nécessite un module de suivi
+    # de position à part (roadmap).
+    losing = [r for r in rows if "loss" in (r["detail"] or "").lower()]
+    if len(losing) >= int(max_daily_loss):
+        return f"Coupe-circuit : {len(losing)} pertes déjà enregistrées aujourd'hui (limite: {max_daily_loss})"
+    return None
+
+
+def check_max_concurrent_trades(settings: dict, exchange: str, symbol: str) -> Optional[str]:
+    max_trades = settings.get("max_concurrent_trades")
+    if not max_trades:
+        return None
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT side, status FROM orders WHERE exchange=? AND symbol=? AND status='executed'
+               ORDER BY id DESC LIMIT 50""",
+            (exchange, symbol.upper()),
+        ).fetchall()
+    open_count = 0
+    for r in rows:
+        if r["side"].lower() == "buy":
+            open_count += 1
+        elif r["side"].lower() == "sell" and open_count > 0:
+            open_count -= 1
+    if open_count >= int(max_trades):
+        return f"Nombre max de trades simultanés atteint ({open_count}/{max_trades})"
+    return None
+
+
+def compute_sl_tp(settings: dict, side: str, price: Optional[float]):
+    """Retourne (stop_loss_price, take_profit_price) si un prix de référence est
+    disponible et que le profil définit des pourcentages SL/TP, sinon (None, None)."""
+    sl_pct = settings.get("stop_loss_pct")
+    tp_pct = settings.get("take_profit_pct")
+    if price is None or (not sl_pct and not tp_pct):
+        return None, None
+    if side.lower() == "buy":
+        sl = price * (1 - sl_pct / 100) if sl_pct else None
+        tp = price * (1 + tp_pct / 100) if tp_pct else None
+    else:
+        sl = price * (1 + sl_pct / 100) if sl_pct else None
+        tp = price * (1 - tp_pct / 100) if tp_pct else None
+    return sl, tp
+
+
+def evaluate(exchange: str, symbol: str, side: str, price: Optional[float] = None):
+    """Retourne (allowed, reason, profile, sl, tp)."""
+    profile = get_active_profile(exchange, symbol)
+    if profile is None:
+        return True, None, None, None, None
+
+    settings = profile["settings"]
+
+    reason = check_trading_hours(settings)
+    if reason:
+        return False, reason, profile, None, None
+
+    reason = check_symbol_whitelist(settings, symbol)
+    if reason:
+        return False, reason, profile, None, None
+
+    reason = check_daily_loss_limit(settings, exchange)
+    if reason:
+        return False, reason, profile, None, None
+
+    reason = check_max_concurrent_trades(settings, exchange, symbol)
+    if reason:
+        return False, reason, profile, None, None
+
+    sl, tp = compute_sl_tp(settings, side, price)
+    return True, None, profile, sl, tp
