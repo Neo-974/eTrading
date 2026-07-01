@@ -255,6 +255,24 @@ def portfolio_overview(_auth: bool = Depends(require_dashboard_auth)):
     return results
 
 
+@app.get("/api/candles")
+def get_candles(exchange: str, symbol: str, interval: str = "1h", limit: int = 200,
+                 _auth: bool = Depends(require_dashboard_auth)):
+    exchange = exchange.lower()
+    if exchange not in SUPPORTED_EXCHANGES:
+        raise HTTPException(status_code=400, detail="Exchange non supporté")
+    adapter = build_adapter(exchange)
+    if adapter is None:
+        raise HTTPException(status_code=400, detail="Exchange non supporté")
+    try:
+        candles = adapter.get_candles(symbol=symbol, interval=interval, limit=limit)
+        return {"status": "ok", "candles": candles}
+    except NotImplementedError as e:
+        return {"status": "unavailable", "detail": str(e), "candles": []}
+    except Exception as e:
+        return {"status": "error", "detail": f"Erreur récupération des données de marché: {e}", "candles": []}
+
+
 # ---------------------------------------------------------------------
 # Dashboard (protégé par auth basique)
 # ---------------------------------------------------------------------

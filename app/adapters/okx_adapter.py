@@ -100,3 +100,21 @@ class OKXAdapter(ExchangeAdapter):
             return {"status": "error", "detail": str(e)}
         except requests.RequestException as e:
             return {"status": "error", "detail": f"Erreur réseau OKX: {e}"}
+
+    def get_candles(self, symbol: str, interval: str = "1h", limit: int = 200) -> list:
+        # Endpoint public, pas besoin de clés API.
+        interval_map = {"15m": "15m", "1h": "1H", "4h": "4H", "1d": "1D"}
+        inst_id = symbol.upper() if "-" in symbol else symbol.upper().replace("USDT", "-USDT")
+        params = {"instId": inst_id, "bar": interval_map.get(interval, "1H"), "limit": str(limit)}
+        resp = requests.get(f"{BASE_URL}/api/v5/market/candles", params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        rows = data.get("data", [])
+        candles = [
+            {
+                "time": int(int(r[0]) / 1000),
+                "open": float(r[1]), "high": float(r[2]), "low": float(r[3]), "close": float(r[4]),
+            }
+            for r in rows
+        ]
+        return sorted(candles, key=lambda c: c["time"])

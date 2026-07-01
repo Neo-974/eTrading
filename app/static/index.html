@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.3/lightweight-charts.standalone.production.js"></script>
 <style>
   :root {
     /* --- Système de tokens : "salle de contrôle" (pas de vert néon crypto) --- */
@@ -193,6 +194,17 @@
   .terminal-result.show { display: block; }
   .warn-box { background: rgba(217,180,90,0.08); border: 1px solid var(--test); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--test); margin-bottom: 16px; }
 
+  /* --- Graphique --- */
+  .chart-toolbar { display: flex; gap: 14px; align-items: flex-end; margin-bottom: 16px; flex-wrap: wrap; }
+  .chart-toolbar .field { min-width: 130px; }
+  .chart-toolbar select, .chart-toolbar input { width: auto; min-width: 130px; }
+  .chart-status { font-size: 12px; color: var(--muted); margin-bottom: 8px; min-height: 16px; font-family: var(--font-mono); }
+  .chart-status.error { color: var(--down); }
+  #chart-container { width: 100%; height: 440px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--bg-raised); }
+  .chart-sltp-row { display: flex; gap: 24px; align-items: flex-end; margin-top: 18px; flex-wrap: wrap; }
+  .chart-sltp-row .gauge-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+  .chart-sltp-row .mono { font-size: 15px; }
+
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
@@ -217,6 +229,10 @@
     <button data-tab="orders">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M2 6.5H14" stroke="currentColor" stroke-width="1.4"/></svg>
       Ordres
+    </button>
+    <button data-tab="chart">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 11L5.5 6.5L8.5 9L14 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.5 3H14V6.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Graphique
     </button>
     <button data-tab="terminal">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 6.5L7 8.5L5 10.5M8.5 10.5H11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -294,6 +310,55 @@
           <thead><tr><th>Date</th><th>Exchange</th><th>Symbole</th><th>Sens</th><th class="mono">Qté</th><th>Statut</th><th>Détail</th></tr></thead>
           <tbody id="orders-body"><tr><td colspan="7" style="color:var(--muted)">Chargement…</td></tr></tbody>
         </table>
+      </div>
+    </div>
+
+    <div id="chart" class="tab-content">
+      <div class="panel">
+        <h2>Graphique</h2>
+        <p class="panel-desc">Chandeliers en direct + lignes de stop-loss / take-profit déplaçables à la souris — glissez une ligne, le pourcentage se recalcule automatiquement.</p>
+        <div class="chart-toolbar">
+          <div class="field"><label>Plateforme</label>
+            <select id="chart-exchange">
+              <option value="bybit">Bybit</option><option value="kraken">Kraken</option>
+              <option value="okx">OKX</option><option value="coinbase">Coinbase</option>
+              <option value="bitpanda">Bitpanda</option><option value="oanda">OANDA</option>
+              <option value="mt5">MT5</option>
+            </select>
+          </div>
+          <div class="field"><label>Symbole</label><input type="text" id="chart-symbol" class="mono-input" value="BTCUSDT"></div>
+          <div class="field"><label>Intervalle</label>
+            <select id="chart-interval">
+              <option value="15m">15 min</option>
+              <option value="1h" selected>1 heure</option>
+              <option value="4h">4 heures</option>
+              <option value="1d">1 jour</option>
+            </select>
+          </div>
+          <div class="field" style="justify-content:flex-end"><button class="btn" id="chart-load">Charger</button></div>
+        </div>
+
+        <div id="chart-status" class="chart-status"></div>
+        <div id="chart-container"></div>
+
+        <div class="chart-sltp-row">
+          <div class="gauge">
+            <div class="gauge-label" style="color:var(--down)">Stop-loss</div>
+            <div class="mono" id="chart-sl-price">—</div>
+            <div class="mono" id="chart-sl-pct" style="color:var(--muted);font-size:11px">—</div>
+          </div>
+          <div class="gauge">
+            <div class="gauge-label" style="color:var(--live)">Take-profit</div>
+            <div class="mono" id="chart-tp-price">—</div>
+            <div class="mono" id="chart-tp-pct" style="color:var(--muted);font-size:11px">—</div>
+          </div>
+          <div class="field" style="min-width:220px">
+            <label>Nom du profil à créer/mettre à jour</label>
+            <input type="text" id="chart-profile-name" class="mono-input" placeholder="Ex: Depuis graphique BTC">
+          </div>
+          <button class="btn" id="chart-save-profile" style="align-self:flex-end">Enregistrer comme profil</button>
+        </div>
+        <div class="terminal-result mono" id="chart-save-result"></div>
       </div>
     </div>
 
@@ -409,11 +474,14 @@ const EXCHANGES = ["bybit", "kraken", "okx", "coinbase", "bitpanda", "oanda", "m
 const TITLES = {
   overview: ["Vue d'ensemble", "État du bot et de vos plateformes connectées"],
   orders: ["Ordres", "Historique complet, tous canaux confondus"],
+  chart: ["Graphique", "Chandeliers en direct et lignes SL/TP déplaçables"],
   terminal: ["Terminal", "Passer un ordre manuellement"],
   strategies: ["Stratégies", "Activer ou mettre en pause par couple exchange/symbole"],
   profiles: ["Profils / Réglages", "Vos scénarios de trading enregistrés"],
   keys: ["Clés API", "Connexion à vos plateformes"],
 };
+
+let chartLoadedOnce = false;
 
 document.querySelectorAll("nav button").forEach(btn => {
   btn.addEventListener("click", () => {
@@ -424,6 +492,10 @@ document.querySelectorAll("nav button").forEach(btn => {
     const [title, sub] = TITLES[btn.dataset.tab];
     document.getElementById("page-title").textContent = title;
     document.getElementById("page-sub").textContent = sub;
+    if (btn.dataset.tab === "chart" && !chartLoadedOnce) {
+      chartLoadedOnce = true;
+      loadChart();
+    }
   });
 });
 
@@ -657,6 +729,150 @@ document.getElementById("profile-form").addEventListener("submit", async (e) => 
   });
   e.target.reset();
   loadProfiles();
+});
+
+// --- Graphique (chandeliers + lignes SL/TP déplaçables) ---
+let priceChart = null;
+let candleSeries = null;
+let slPriceLine = null, tpPriceLine = null;
+let slPrice = null, tpPrice = null;
+let lastClose = null;
+let draggingLine = null; // 'sl' | 'tp' | null
+
+function ensureChart() {
+  if (priceChart) return;
+  const container = document.getElementById("chart-container");
+  priceChart = LightweightCharts.createChart(container, {
+    layout: { background: { color: "transparent" }, textColor: "#aab4c8", fontFamily: "IBM Plex Mono, monospace", fontSize: 11 },
+    grid: { vertLines: { color: "#1a2437" }, horzLines: { color: "#1a2437" } },
+    rightPriceScale: { borderColor: "#223049" },
+    timeScale: { borderColor: "#223049", timeVisible: true },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    width: container.clientWidth, height: container.clientHeight || 440,
+  });
+  candleSeries = priceChart.addCandlestickSeries({
+    upColor: "#4fb286", downColor: "#d1596b", borderVisible: false,
+    wickUpColor: "#4fb286", wickDownColor: "#d1596b",
+  });
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(entries => {
+      if (!entries.length) return;
+      const { width, height } = entries[0].contentRect;
+      if (width > 0 && height > 0) priceChart.applyOptions({ width, height });
+    }).observe(container);
+  }
+
+  container.addEventListener("mousedown", onChartMouseDown);
+  window.addEventListener("mousemove", onChartMouseMove);
+  window.addEventListener("mouseup", () => { draggingLine = null; });
+}
+
+function onChartMouseDown(e) {
+  if (!candleSeries || slPrice === null) return;
+  const rect = document.getElementById("chart-container").getBoundingClientRect();
+  const y = e.clientY - rect.top;
+  const slY = candleSeries.priceToCoordinate(slPrice);
+  const tpY = candleSeries.priceToCoordinate(tpPrice);
+  if (slY !== null && Math.abs(y - slY) < 7) { draggingLine = "sl"; e.preventDefault(); }
+  else if (tpY !== null && Math.abs(y - tpY) < 7) { draggingLine = "tp"; e.preventDefault(); }
+}
+
+function onChartMouseMove(e) {
+  if (!draggingLine || !candleSeries) return;
+  const rect = document.getElementById("chart-container").getBoundingClientRect();
+  if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
+  const y = e.clientY - rect.top;
+  const price = candleSeries.coordinateToPrice(y);
+  if (price === null) return;
+  if (draggingLine === "sl") { slPrice = price; updateSlLine(); } else { tpPrice = price; updateTpLine(); }
+  updateSlTpLabels();
+}
+
+function updateSlLine() {
+  if (slPriceLine) candleSeries.removePriceLine(slPriceLine);
+  slPriceLine = candleSeries.createPriceLine({ price: slPrice, color: "#d1596b", lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "SL" });
+}
+function updateTpLine() {
+  if (tpPriceLine) candleSeries.removePriceLine(tpPriceLine);
+  tpPriceLine = candleSeries.createPriceLine({ price: tpPrice, color: "#4fb286", lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "TP" });
+}
+
+function fmtPrice(p) {
+  if (p === null || p === undefined) return "—";
+  return p < 1 ? p.toFixed(6) : p.toFixed(2);
+}
+
+function updateSlTpLabels() {
+  document.getElementById("chart-sl-price").textContent = fmtPrice(slPrice);
+  document.getElementById("chart-tp-price").textContent = fmtPrice(tpPrice);
+  if (lastClose) {
+    const slPct = (lastClose - slPrice) / lastClose * 100;
+    const tpPct = (tpPrice - lastClose) / lastClose * 100;
+    document.getElementById("chart-sl-pct").textContent = "-" + slPct.toFixed(2) + "% depuis le dernier prix";
+    document.getElementById("chart-tp-pct").textContent = "+" + tpPct.toFixed(2) + "% depuis le dernier prix";
+  }
+}
+
+async function loadChart() {
+  ensureChart();
+  const exchange = document.getElementById("chart-exchange").value;
+  const symbol = document.getElementById("chart-symbol").value.trim();
+  const interval = document.getElementById("chart-interval").value;
+  const statusEl = document.getElementById("chart-status");
+  statusEl.className = "chart-status";
+  statusEl.textContent = "Chargement des données…";
+  try {
+    const res = await fetchJSON(`/api/candles?exchange=${exchange}&symbol=${encodeURIComponent(symbol)}&interval=${interval}`);
+    if (res.status !== "ok" || !res.candles.length) {
+      statusEl.className = "chart-status error";
+      statusEl.textContent = res.detail || "Aucune donnée disponible pour ce symbole.";
+      candleSeries.setData([]);
+      return;
+    }
+    statusEl.textContent = `${res.candles.length} bougies chargées — glissez les lignes SL/TP sur le graphique.`;
+    candleSeries.setData(res.candles);
+    priceChart.timeScale().fitContent();
+    lastClose = res.candles[res.candles.length - 1].close;
+
+    const existing = allProfiles.find(p => p.exchange === exchange && (p.symbol === symbol.toUpperCase() || p.symbol === "*"));
+    const slPct = (existing && existing.settings.stop_loss_pct) || 2;
+    const tpPct = (existing && existing.settings.take_profit_pct) || 4;
+    slPrice = lastClose * (1 - slPct / 100);
+    tpPrice = lastClose * (1 + tpPct / 100);
+    updateSlLine(); updateTpLine(); updateSlTpLabels();
+    document.getElementById("chart-profile-name").value = existing ? existing.name : `${exchange} ${symbol}`;
+  } catch (err) {
+    statusEl.className = "chart-status error";
+    statusEl.textContent = "Erreur: " + err.message;
+  }
+}
+
+document.getElementById("chart-load").addEventListener("click", loadChart);
+
+document.getElementById("chart-save-profile").addEventListener("click", async () => {
+  const name = document.getElementById("chart-profile-name").value.trim();
+  const resultBox = document.getElementById("chart-save-result");
+  resultBox.className = "terminal-result mono show";
+  if (!name) { resultBox.style.borderColor = "var(--down)"; resultBox.textContent = "Donnez un nom au profil avant d'enregistrer."; return; }
+  if (!lastClose || slPrice === null || tpPrice === null) { resultBox.style.borderColor = "var(--down)"; resultBox.textContent = "Chargez d'abord un graphique."; return; }
+  const exchange = document.getElementById("chart-exchange").value;
+  const symbol = document.getElementById("chart-symbol").value.trim().toUpperCase();
+  const slPct = (lastClose - slPrice) / lastClose * 100;
+  const tpPct = (tpPrice - lastClose) / lastClose * 100;
+  resultBox.textContent = "Enregistrement…";
+  try {
+    await fetchJSON("/api/profiles", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, exchange, symbol, is_active: false, stop_loss_pct: Number(slPct.toFixed(2)), take_profit_pct: Number(tpPct.toFixed(2)) }),
+    });
+    resultBox.style.borderColor = "var(--live)";
+    resultBox.textContent = `Profil "${name}" enregistré (SL -${slPct.toFixed(2)}% / TP +${tpPct.toFixed(2)}%). Activez-le depuis l'onglet Profils.`;
+    loadProfiles();
+  } catch (err) {
+    resultBox.style.borderColor = "var(--down)";
+    resultBox.textContent = "Erreur: " + err.message;
+  }
 });
 
 // --- Terminal manuel ---

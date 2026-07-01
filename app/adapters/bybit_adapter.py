@@ -109,3 +109,25 @@ class BybitAdapter(ExchangeAdapter):
             return {"status": "error", "detail": str(e)}
         except requests.RequestException as e:
             return {"status": "error", "detail": f"Erreur réseau Bybit: {e}"}
+
+    def get_candles(self, symbol: str, interval: str = "1h", limit: int = 200) -> list:
+        # Endpoint public, pas besoin de clés API.
+        interval_map = {"15m": "15", "1h": "60", "4h": "240", "1d": "D"}
+        params = {
+            "category": "spot",
+            "symbol": symbol.upper(),
+            "interval": interval_map.get(interval, "60"),
+            "limit": str(limit),
+        }
+        resp = requests.get(f"{MAINNET_URL}/v5/market/kline", params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        rows = data.get("result", {}).get("list", [])
+        candles = [
+            {
+                "time": int(int(r[0]) / 1000),
+                "open": float(r[1]), "high": float(r[2]), "low": float(r[3]), "close": float(r[4]),
+            }
+            for r in rows
+        ]
+        return sorted(candles, key=lambda c: c["time"])

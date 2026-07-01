@@ -95,3 +95,22 @@ class KrakenAdapter(ExchangeAdapter):
             return {"status": "error", "detail": str(e)}
         except requests.RequestException as e:
             return {"status": "error", "detail": f"Erreur réseau Kraken: {e}"}
+
+    def get_candles(self, symbol: str, interval: str = "1h", limit: int = 200) -> list:
+        # Endpoint public, pas besoin de clés API.
+        interval_map = {"15m": 15, "1h": 60, "4h": 240, "1d": 1440}
+        params = {"pair": symbol.upper(), "interval": interval_map.get(interval, 60)}
+        resp = requests.get(f"{BASE_URL}/0/public/OHLC", params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("error"):
+            raise requests.RequestException("; ".join(data["error"]))
+        result = data.get("result", {})
+        # La clé du pair dans la réponse peut différer légèrement du symbole demandé.
+        pair_key = next((k for k in result if k != "last"), None)
+        rows = result.get(pair_key, []) if pair_key else []
+        candles = [
+            {"time": int(r[0]), "open": float(r[1]), "high": float(r[2]), "low": float(r[3]), "close": float(r[4])}
+            for r in rows
+        ]
+        return candles[-limit:]

@@ -116,3 +116,24 @@ class CoinbaseAdapter(ExchangeAdapter):
             return {"status": "error", "detail": str(e)}
         except requests.RequestException as e:
             return {"status": "error", "detail": f"Erreur réseau Coinbase: {e}"}
+
+    def get_candles(self, symbol: str, interval: str = "1h", limit: int = 200) -> list:
+        # Endpoint public de données de marché (aucune authentification requise).
+        granularity_map = {"15m": ("FIFTEEN_MINUTE", 900), "1h": ("ONE_HOUR", 3600), "4h": ("SIX_HOUR", 21600), "1d": ("ONE_DAY", 86400)}
+        granularity, seconds = granularity_map.get(interval, ("ONE_HOUR", 3600))
+        product_id = symbol.upper() if "-" in symbol else symbol.upper().replace("USD", "-USD")
+        end = int(time.time())
+        start = end - seconds * limit
+        params = {"start": str(start), "end": str(end), "granularity": granularity}
+        resp = requests.get(f"{BASE_URL}/api/v3/brokerage/market/products/{product_id}/candles", params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        rows = data.get("candles", [])
+        candles = [
+            {
+                "time": int(r["start"]),
+                "open": float(r["open"]), "high": float(r["high"]), "low": float(r["low"]), "close": float(r["close"]),
+            }
+            for r in rows
+        ]
+        return sorted(candles, key=lambda c: c["time"])

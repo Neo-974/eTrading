@@ -19,6 +19,18 @@ PRACTICE_URL = "https://api-fxpractice.oanda.com"
 LIVE_URL = "https://api-fxtrade.oanda.com"
 
 
+def datetime_parse(iso_str: str) -> float:
+    """Parse un timestamp OANDA (ISO8601 avec nanosecondes) en timestamp UNIX (secondes)."""
+    import datetime as dt
+
+    # OANDA renvoie parfois plus de 6 chiffres de précision décimale (nanosecondes),
+    # que %f (microsecondes, 6 chiffres) ne gère pas directement.
+    base, _, frac = iso_str.rstrip("Z").partition(".")
+    frac6 = (frac + "000000")[:6]
+    parsed = dt.datetime.strptime(f"{base}.{frac6}", "%Y-%m-%dT%H:%M:%S.%f").replace(tzinfo=dt.timezone.utc)
+    return parsed.timestamp()
+
+
 class OandaAdapter(ExchangeAdapter):
     name = "oanda"
 
@@ -87,3 +99,23 @@ class OandaAdapter(ExchangeAdapter):
             return {"status": "error", "detail": str(e)}
         except requests.RequestException as e:
             return {"status": "error", "detail": f"Erreur réseau OANDA: {e}"}
+
+    def get_candles(self, symbol: str, interval: str = "1h", limit: int = 200) -> list:
+        if not self.is_configured():
+            raise NotImplementedError("Configurez d'abord vos clés OANDA pour voir le graphique (pas de données publiques sans authentification).")
+        granularity_map = {"15m": "M15", "1h": "H1", "4h": "H4", "1d": "D"}
+        url = f"{self.base_url}/v3/instruments/{symbol.upper()}/candles"
+        params = {"granularity": granularity_map.get(interval, "H1"), "count": str(limit), "price": "M"}
+        resp = requests.get(url, headers=self._headers(), params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        candles = []
+        for c in data.get("candles", []):
+            if not c.get("complete", True):
+                continue
+            mid = c["mid"]
+            candles.append({
+                "time": int(datetime_parse(c["time"])),
+                "open": float(mid["o"]), "high": float(mid["h"]), "low": float(mid["l"]), "close": float(mid["c"]),
+            })
+        return candles

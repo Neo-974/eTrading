@@ -31,6 +31,12 @@ class ExchangeAdapter(ABC):
         """Retourne False si les clés API sont manquantes."""
         return True
 
+    def get_candles(self, symbol: str, interval: str = "1h", limit: int = 200) -> list:
+        """Retourne une liste de bougies [{time, open, high, low, close}, ...],
+        time en timestamp UNIX (secondes). Optionnel : lève NotImplementedError
+        si la plateforme n'a pas de connecteur de données de marché."""
+        raise NotImplementedError(f"Graphique non disponible pour {self.name}")
+
 
 class NotConfiguredError(Exception):
     """Levée quand un adapter est appelé sans clés API configurées."""

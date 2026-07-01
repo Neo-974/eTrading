@@ -77,3 +77,30 @@ class BitpandaAdapter(ExchangeAdapter):
             return {"status": "error", "detail": str(e)}
         except requests.RequestException as e:
             return {"status": "error", "detail": f"Erreur réseau Bitpanda: {e}"}
+
+    def get_candles(self, symbol: str, interval: str = "1h", limit: int = 200) -> list:
+        # Endpoint public, pas besoin de clé API.
+        import datetime as dt
+
+        unit_map = {"15m": ("MINUTES", 15), "1h": ("HOURS", 1), "4h": ("HOURS", 4), "1d": ("DAYS", 1)}
+        unit, period = unit_map.get(interval, ("HOURS", 1))
+        seconds_per = {"MINUTES": 60, "HOURS": 3600, "DAYS": 86400}[unit] * period
+        instrument_code = symbol.upper() if "_" in symbol else symbol.upper().replace("EUR", "_EUR")
+        now = dt.datetime.now(dt.timezone.utc)
+        start = now - dt.timedelta(seconds=seconds_per * limit)
+        params = {
+            "unit": unit, "period": period,
+            "from": start.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            "to": now.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+        }
+        resp = requests.get(f"{BASE_URL}/candlesticks/{instrument_code}", params=params, timeout=10)
+        resp.raise_for_status()
+        rows = resp.json()
+        candles = []
+        for r in rows:
+            t = dt.datetime.strptime(r["time"], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=dt.timezone.utc)
+            candles.append({
+                "time": int(t.timestamp()),
+                "open": float(r["open"]), "high": float(r["high"]), "low": float(r["low"]), "close": float(r["close"]),
+            })
+        return sorted(candles, key=lambda c: c["time"])
