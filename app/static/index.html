@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Trading Automation</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161922; --border: #262b38;
+    --text: #e7e9ee; --muted: #8a90a2;
+    --green: #3ecf8e; --red: #f0556b; --amber: #f0b955; --accent: #5b8cff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { padding: 20px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  header h1 { margin: 0; font-size: 18px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  nav { display: flex; gap: 4px; padding: 12px 28px 0; border-bottom: 1px solid var(--border); }
+  nav button { background: none; border: none; color: var(--muted); padding: 10px 16px; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; }
+  nav button.active { color: var(--text); border-bottom-color: var(--accent); }
+  main { padding: 24px 28px; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .card .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .card .value { font-size: 26px; font-weight: 600; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 16px; }
+  .panel h2 { margin-top: 0; font-size: 15px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  .status-executed { color: var(--green); }
+  .status-error { color: var(--red); }
+  .status-ignored { color: var(--amber); }
+  form.keys-form { display: grid; grid-template-columns: 140px 1fr 1fr 100px 100px; gap: 10px; align-items: center; margin-bottom: 10px; }
+  input[type=text], input[type=password] { background: #0d0f14; border: 1px solid var(--border); color: var(--text); padding: 8px 10px; border-radius: 6px; }
+  button.save { background: var(--accent); color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; }
+  .toggle { width: 18px; height: 18px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Trading Automation</h1>
+  <span class="muted">Webhook actif sur /webhook</span>
+</header>
+
+<nav>
+  <button class="active" data-tab="overview">Vue d'ensemble</button>
+  <button data-tab="orders">Ordres</button>
+  <button data-tab="strategies">Stratégies</button>
+  <button data-tab="keys">Clés API</button>
+</nav>
+
+<main>
+
+  <div id="overview" class="tab-content active">
+    <div class="grid">
+      <div class="card"><div class="label">Total ordres</div><div class="value" id="stat-total">—</div></div>
+      <div class="card"><div class="label">Exécutés</div><div class="value" style="color:var(--green)" id="stat-executed">—</div></div>
+      <div class="card"><div class="label">Erreurs</div><div class="value" style="color:var(--red)" id="stat-errors">—</div></div>
+      <div class="card"><div class="label">Ignorés</div><div class="value" style="color:var(--amber)" id="stat-ignored">—</div></div>
+    </div>
+    <div class="panel">
+      <h2>Plateformes disponibles</h2>
+      <p class="muted">Bybit (spot/dérivés, testnet + réel) · Kraken (spot) · MT4/MT5 (à venir)</p>
+    </div>
+  </div>
+
+  <div id="orders" class="tab-content">
+    <div class="panel">
+      <h2>Historique des ordres</h2>
+      <table>
+        <thead><tr><th>Date</th><th>Exchange</th><th>Symbole</th><th>Sens</th><th>Qté</th><th>Statut</th><th>Détail</th></tr></thead>
+        <tbody id="orders-body"><tr><td colspan="7" class="muted">Chargement…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="strategies" class="tab-content">
+    <div class="panel">
+      <h2>Stratégies actives</h2>
+      <p class="muted">Une stratégie apparaît ici automatiquement dès la première alerte reçue pour ce couple exchange/symbole.</p>
+      <table>
+        <thead><tr><th>Exchange</th><th>Symbole</th><th>Active</th></tr></thead>
+        <tbody id="strategies-body"><tr><td colspan="3" class="muted">Chargement…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="keys" class="tab-content">
+    <div class="panel">
+      <h2>Clés API</h2>
+      <p class="muted">Les clés sont chiffrées localement et ne sont jamais réaffichées en clair.</p>
+      <div id="keys-forms"></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+const EXCHANGES = ["bybit", "kraken", "mt5"];
+
+document.querySelectorAll("nav button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(btn.dataset.tab).classList.add("active");
+  });
+});
+
+async function fetchJSON(url, opts) {
+  const res = await fetch(url, opts);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function loadOrders() {
+  const orders = await fetchJSON("/api/orders");
+  const total = orders.length;
+  const executed = orders.filter(o => o.status === "executed").length;
+  const errors = orders.filter(o => o.status === "error").length;
+  const ignored = orders.filter(o => o.status === "ignored").length;
+  document.getElementById("stat-total").textContent = total;
+  document.getElementById("stat-executed").textContent = executed;
+  document.getElementById("stat-errors").textContent = errors;
+  document.getElementById("stat-ignored").textContent = ignored;
+
+  const body = document.getElementById("orders-body");
+  body.innerHTML = orders.length ? "" : '<tr><td colspan="7" class="muted">Aucun ordre pour le moment.</td></tr>';
+  for (const o of orders) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${new Date(o.created_at).toLocaleString()}</td><td>${o.exchange}</td><td>${o.symbol}</td>
+      <td>${o.side}</td><td>${o.quantity}</td><td class="status-${o.status}">${o.status}</td><td class="muted">${o.detail || ""}</td>`;
+    body.appendChild(tr);
+  }
+}
+
+async function loadStrategies() {
+  const strategies = await fetchJSON("/api/strategies");
+  const body = document.getElementById("strategies-body");
+  body.innerHTML = strategies.length ? "" : '<tr><td colspan="3" class="muted">Aucune stratégie pour le moment.</td></tr>';
+  for (const s of strategies) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${s.exchange}</td><td>${s.symbol}</td>
+      <td><input type="checkbox" class="toggle" data-exchange="${s.exchange}" data-symbol="${s.symbol}" ${s.enabled ? "checked" : ""}></td>`;
+    body.appendChild(tr);
+  }
+  body.querySelectorAll(".toggle").forEach(cb => {
+    cb.addEventListener("change", async () => {
+      await fetchJSON("/api/strategies/toggle", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ exchange: cb.dataset.exchange, symbol: cb.dataset.symbol, enabled: cb.checked }),
+      });
+    });
+  });
+}
+
+async function loadKeys() {
+  const keys = await fetchJSON("/api/keys");
+  const container = document.getElementById("keys-forms");
+  container.innerHTML = "";
+  for (const k of keys) {
+    const form = document.createElement("form");
+    form.className = "keys-form";
+    form.innerHTML = `
+      <strong>${k.exchange}${k.configured ? " ✅" : ""}</strong>
+      <input type="text" placeholder="API Key" name="api_key" ${k.exchange === "mt5" ? 'data-mt5="1"' : ""}>
+      <input type="password" placeholder="${k.exchange === 'mt5' ? 'Token MetaApi' : 'API Secret'}" name="api_secret">
+      <label class="muted"><input type="checkbox" name="testnet" ${k.testnet === undefined || k.testnet ? "checked" : ""}> Testnet</label>
+      <button type="submit" class="save">Enregistrer</button>
+    `;
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      await fetchJSON("/api/keys", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          exchange: k.exchange,
+          api_key: fd.get("api_key"),
+          api_secret: fd.get("api_secret"),
+          testnet: fd.get("testnet") === "on",
+        }),
+      });
+      loadKeys();
+    });
+    container.appendChild(form);
+  }
+}
+
+async function refreshAll() {
+  await Promise.all([loadOrders(), loadStrategies()]);
+}
+
+loadKeys();
+refreshAll();
+setInterval(refreshAll, 5000);
+</script>
+
+</body>
+</html>

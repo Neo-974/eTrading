@@ -1,0 +1,8 @@
+.env
+master.key
+trading.db
+__pycache__/
+*.pyc
+venv/
+app/logs/*.log
+.DS_Store

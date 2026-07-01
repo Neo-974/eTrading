@@ -1,0 +1,22 @@
+//@version=5
+strategy("Demo MA Cross - Webhook Alert", overlay=true)
+
+fastLen = input.int(9, "MA rapide")
+slowLen = input.int(21, "MA lente")
+
+fastMA = ta.sma(close, fastLen)
+slowMA = ta.sma(close, slowLen)
+
+longCondition = ta.crossover(fastMA, slowMA)
+shortCondition = ta.crossunder(fastMA, slowMA)
+
+if (longCondition)
+    strategy.entry("Long", strategy.long)
+    alert('{"secret":"VOTRE_SECRET_ICI","exchange":"bybit","symbol":"BTCUSDT","side":"buy","order_type":"market","quantity":0.001}', alert.freq_once_per_bar_close)
+
+if (shortCondition)
+    strategy.close("Long")
+    alert('{"secret":"VOTRE_SECRET_ICI","exchange":"bybit","symbol":"BTCUSDT","side":"sell","order_type":"market","quantity":0.001}', alert.freq_once_per_bar_close)
+
+plot(fastMA, color=color.blue, title="MA rapide")
+plot(slowMA, color=color.orange, title="MA lente")
