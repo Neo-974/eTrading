@@ -30,6 +30,17 @@ call venv\Scripts\activate.bat
 REM --- Installe les dependances (rapide si deja installees) ---
 echo [2/4] Verification des dependances...
 pip install -q -r requirements.txt
+if errorlevel 1 (
+    echo.
+    echo [ERREUR] L'installation des dependances a echoue.
+    echo Cela arrive parfois si votre version de Python est tres recente.
+    echo Essayez de mettre pip a jour puis relancez :
+    echo     venv\Scripts\python -m pip install --upgrade pip
+    echo Si le probleme persiste, installez Python 3.11 ou 3.12 depuis
+    echo https://python.org et relancez ce script.
+    pause
+    exit /b 1
+)
 
 REM --- Cree le fichier .env s'il n'existe pas ---
 if not exist ".env" (
