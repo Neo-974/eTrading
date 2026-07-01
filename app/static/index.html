@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.3/lightweight-charts.standalone.production.js"></script>
+<script src="/assets/lightweight-charts.js"></script>
 <style>
   :root {
     /* --- Système de tokens : "salle de contrôle" (pas de vert néon crypto) --- */
@@ -741,6 +741,9 @@ let draggingLine = null; // 'sl' | 'tp' | null
 
 function ensureChart() {
   if (priceChart) return;
+  if (typeof LightweightCharts === "undefined") {
+    throw new Error("La librairie de graphique (lightweight-charts.js) n'a pas pu se charger. Vérifiez qu'elle est bien présente dans app/static/ et rechargez la page (Ctrl+F5).");
+  }
   const container = document.getElementById("chart-container");
   priceChart = LightweightCharts.createChart(container, {
     layout: { background: { color: "transparent" }, textColor: "#aab4c8", fontFamily: "IBM Plex Mono, monospace", fontSize: 11 },
@@ -815,13 +818,19 @@ function updateSlTpLabels() {
 }
 
 async function loadChart() {
-  ensureChart();
-  const exchange = document.getElementById("chart-exchange").value;
-  const symbol = document.getElementById("chart-symbol").value.trim();
-  const interval = document.getElementById("chart-interval").value;
   const statusEl = document.getElementById("chart-status");
   statusEl.className = "chart-status";
   statusEl.textContent = "Chargement des données…";
+  try {
+    ensureChart();
+  } catch (err) {
+    statusEl.className = "chart-status error";
+    statusEl.textContent = "Erreur: " + err.message;
+    return;
+  }
+  const exchange = document.getElementById("chart-exchange").value;
+  const symbol = document.getElementById("chart-symbol").value.trim();
+  const interval = document.getElementById("chart-interval").value;
   try {
     const res = await fetchJSON(`/api/candles?exchange=${exchange}&symbol=${encodeURIComponent(symbol)}&interval=${interval}`);
     if (res.status !== "ok" || !res.candles.length) {
