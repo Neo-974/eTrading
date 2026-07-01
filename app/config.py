@@ -1,5 +1,9 @@
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 class Settings:
     # Secret partagé avec TradingView pour valider les alertes webhook.

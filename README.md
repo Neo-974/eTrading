@@ -48,6 +48,21 @@ cp .env.example .env
 Ouvrez `.env` et remplacez `WEBHOOK_SECRET` et `DASHBOARD_PASSWORD` par des
 valeurs solides (génération : `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`).
 
+### Raccourci Windows (lancement en un clic)
+
+Si vous êtes sous Windows, deux scripts sont fournis dans `scripts/` pour
+éviter de retaper les commandes à chaque fois :
+
+1. **Une seule fois** : double-cliquez sur `scripts/create-desktop-shortcut.vbs`
+   → un raccourci **"eTrading"** apparaît sur votre Bureau.
+2. **À chaque lancement** : double-cliquez sur ce raccourci. Il installe
+   automatiquement l'environnement virtuel et les dépendances si besoin
+   (uniquement au premier lancement), crée le `.env` s'il n'existe pas, puis
+   démarre le serveur et ouvre http://localhost:8000 dans votre navigateur.
+
+Le fichier `.env` est chargé automatiquement par le serveur (via
+`python-dotenv`) — pas besoin de le charger manuellement dans le terminal.
+
 ## 2. Lancer le serveur
 
 ```bash
