@@ -134,6 +134,16 @@ class BotProfileInput(BaseModel):
     max_concurrent_trades: Optional[int] = None
 
 
+class ManualOrderInput(BaseModel):
+    exchange: str
+    symbol: str
+    side: str
+    order_type: str = Field(default="market")
+    quantity: float
+    price: Optional[float] = None
+    bypass_profile_checks: bool = False
+
+
 def _log_order(exchange, symbol, side, quantity, order_type, price, status, detail):
     now = datetime.now(timezone.utc).isoformat()
     with get_conn() as conn:
@@ -151,6 +161,52 @@ def _log_order(exchange, symbol, side, quantity, order_type, price, status, deta
         )
 
 
+def _execute_order(exchange: str, symbol: str, side: str, quantity: float, order_type: str,
+                    price: Optional[float], skip_risk_checks: bool = False, source: str = "webhook") -> dict:
+    """Logique partagée entre le webhook TradingView et le terminal manuel du dashboard."""
+    exchange = exchange.lower()
+    if exchange not in SUPPORTED_EXCHANGES:
+        detail = f"Exchange '{exchange}' non supporté (attendu: {', '.join(SUPPORTED_EXCHANGES)})"
+        _log_order(exchange, symbol, side, quantity, order_type, price, "error", detail)
+        return {"status": "error", "detail": detail}
+
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT enabled FROM strategies WHERE exchange=? AND symbol=?",
+            (exchange, symbol.upper()),
+        ).fetchone()
+    if row is not None and not row["enabled"] and not skip_risk_checks:
+        detail = "Stratégie désactivée depuis le dashboard"
+        _log_order(exchange, symbol, side, quantity, order_type, price, "ignored", detail)
+        return {"status": "ignored", "detail": detail}
+
+    sl = tp = None
+    profile = None
+    if not skip_risk_checks:
+        allowed, reason, profile, sl, tp = risk_manager.evaluate(exchange, symbol, side, price)
+        if not allowed:
+            _log_order(exchange, symbol, side, quantity, order_type, price, "ignored", reason)
+            logger.info("Ordre bloqué par le profil '%s': %s", profile["name"] if profile else "?", reason)
+            return {"status": "ignored", "detail": reason}
+
+    adapter = build_adapter(exchange)
+    if adapter is None or not adapter.is_configured():
+        detail = f"Clés API manquantes pour {exchange}"
+        _log_order(exchange, symbol, side, quantity, order_type, price, "error", detail)
+        return {"status": "error", "detail": detail}
+
+    result = adapter.place_order(symbol=symbol, side=side, quantity=quantity, order_type=order_type, price=price)
+    detail = result.get("detail", "")
+    if source == "manual":
+        detail = f"[Terminal manuel] {detail}"
+    if sl or tp:
+        detail += f" | SL={sl} TP={tp} (profil '{profile['name']}')"
+
+    _log_order(exchange, symbol, side, quantity, order_type, price, result["status"], detail)
+    logger.info("Ordre %s sur %s %s (%s): %s", result["status"], exchange, symbol, source, detail)
+    return {**result, "detail": detail, "stop_loss": sl, "take_profit": tp}
+
+
 # ---------------------------------------------------------------------
 # Webhook TradingView
 # ---------------------------------------------------------------------
@@ -162,50 +218,41 @@ async def receive_alert(alert: TradingViewAlert):
         logger.warning("Secret invalide reçu sur /webhook")
         raise HTTPException(status_code=401, detail="Secret invalide")
 
-    exchange = alert.exchange.lower()
-    if exchange not in SUPPORTED_EXCHANGES:
-        detail = f"Exchange '{alert.exchange}' non supporté (attendu: {', '.join(SUPPORTED_EXCHANGES)})"
-        _log_order(exchange, alert.symbol, alert.side, alert.quantity, alert.order_type, alert.price, "error", detail)
-        raise HTTPException(status_code=400, detail=detail)
-
-    # Stratégie désactivée manuellement depuis le dashboard ?
-    with get_conn() as conn:
-        row = conn.execute(
-            "SELECT enabled FROM strategies WHERE exchange=? AND symbol=?",
-            (exchange, alert.symbol.upper()),
-        ).fetchone()
-    if row is not None and not row["enabled"]:
-        detail = "Stratégie désactivée depuis le dashboard"
-        _log_order(exchange, alert.symbol, alert.side, alert.quantity, alert.order_type, alert.price, "ignored", detail)
-        return {"status": "ignored", "detail": detail}
-
-    # --- Vérifications de risque selon le profil actif ---
-    allowed, reason, profile, sl, tp = risk_manager.evaluate(exchange, alert.symbol, alert.side, alert.price)
-    if not allowed:
-        _log_order(exchange, alert.symbol, alert.side, alert.quantity, alert.order_type, alert.price, "ignored", reason)
-        logger.info("Ordre bloqué par le profil '%s': %s", profile["name"] if profile else "?", reason)
-        return {"status": "ignored", "detail": reason}
-
-    adapter = build_adapter(exchange)
-    if adapter is None or not adapter.is_configured():
-        detail = f"Clés API manquantes pour {exchange}"
-        _log_order(exchange, alert.symbol, alert.side, alert.quantity, alert.order_type, alert.price, "error", detail)
-        raise HTTPException(status_code=400, detail=detail)
-
-    result = adapter.place_order(
-        symbol=alert.symbol, side=alert.side, quantity=alert.quantity,
-        order_type=alert.order_type, price=alert.price,
+    result = _execute_order(
+        alert.exchange, alert.symbol, alert.side, alert.quantity,
+        alert.order_type, alert.price, skip_risk_checks=False, source="webhook",
     )
-    detail = result.get("detail", "")
-    if sl or tp:
-        detail += f" | SL={sl} TP={tp} (calculés depuis le profil '{profile['name']}')"
+    if result["status"] == "error" and "non supporté" in result.get("detail", ""):
+        raise HTTPException(status_code=400, detail=result["detail"])
+    if result["status"] == "error" and "Clés API manquantes" in result.get("detail", ""):
+        raise HTTPException(status_code=400, detail=result["detail"])
+    return result
 
-    _log_order(
-        exchange, alert.symbol, alert.side, alert.quantity, alert.order_type, alert.price,
-        result["status"], detail,
+
+@app.post("/api/manual-order")
+def manual_order(payload: ManualOrderInput, _auth: bool = Depends(require_dashboard_auth)):
+    """Terminal manuel : passe un ordre directement depuis le dashboard, sans TradingView."""
+    result = _execute_order(
+        payload.exchange, payload.symbol, payload.side, payload.quantity,
+        payload.order_type, payload.price, skip_risk_checks=payload.bypass_profile_checks, source="manual",
     )
-    logger.info("Ordre %s sur %s %s: %s", result["status"], exchange, alert.symbol, detail)
-    return {**result, "detail": detail, "stop_loss": sl, "take_profit": tp}
+    return result
+
+
+@app.get("/api/portfolio")
+def portfolio_overview(_auth: bool = Depends(require_dashboard_auth)):
+    """Vue agrégée : tente de récupérer le solde sur chaque exchange configuré.
+    Le format de solde diffère selon la plateforme (pas de normalisation), on
+    renvoie donc la réponse brute par exchange pour affichage côté dashboard."""
+    results = {}
+    for ex in SUPPORTED_EXCHANGES:
+        adapter = build_adapter(ex)
+        if adapter is None or not adapter.is_configured():
+            results[ex] = {"configured": False}
+            continue
+        balance = adapter.get_account_balance()
+        results[ex] = {"configured": True, **balance}
+    return results
 
 
 # ---------------------------------------------------------------------

@@ -2,149 +2,418 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Trading Automation</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>eTrading — Poste de contrôle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0f1115; --panel: #161922; --border: #262b38;
-    --text: #e7e9ee; --muted: #8a90a2;
-    --green: #3ecf8e; --red: #f0556b; --amber: #f0b955; --accent: #5b8cff;
+    /* --- Système de tokens : "salle de contrôle" (pas de vert néon crypto) --- */
+    --bg: #0b1220;
+    --bg-raised: #0e1626;
+    --panel: #121b2e;
+    --panel-hover: #16223a;
+    --border: #223049;
+    --border-soft: #1a2437;
+    --text: #e8ecf3;
+    --text-dim: #aab4c8;
+    --muted: #6d7a95;
+
+    --accent: #d98e4a;        /* cuivre/ambre — signal principal */
+    --accent-dim: #8a5a2e;
+    --live: #4fb286;          /* vert sourd — réel/actif */
+    --live-glow: rgba(79, 178, 134, 0.35);
+    --test: #d9b45a;          /* ambre — testnet/dry-run */
+    --test-glow: rgba(217, 180, 90, 0.3);
+    --down: #d1596b;
+    --down-glow: rgba(209, 89, 107, 0.3);
+    --idle: #3d4a63;
+
+    --radius: 10px;
+    --font-display: 'IBM Plex Sans', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
   }
+
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
-  header { padding: 20px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-  header h1 { margin: 0; font-size: 18px; }
-  .muted { color: var(--muted); font-size: 13px; }
-  nav { display: flex; gap: 4px; padding: 12px 28px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-  nav button { background: none; border: none; color: var(--muted); padding: 10px 16px; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; }
-  nav button.active { color: var(--text); border-bottom-color: var(--accent); }
-  main { padding: 24px 28px; }
+  html { color-scheme: dark; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: var(--font-display); font-size: 14px; line-height: 1.5;
+    display: flex; min-height: 100vh;
+  }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  ::selection { background: var(--accent-dim); color: white; }
+
+  /* --- Sidebar --- */
+  aside {
+    width: 220px; flex-shrink: 0; background: var(--bg-raised);
+    border-right: 1px solid var(--border-soft); padding: 22px 14px;
+    display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 24px; }
+  .brand-mark {
+    width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+    display: flex; align-items: center; justify-content: center; font-family: var(--font-mono);
+    font-weight: 600; font-size: 13px; color: #1a1206; flex-shrink: 0;
+  }
+  .brand-name { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
+  .brand-sub { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: -2px; }
+
+  nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  nav button {
+    display: flex; align-items: center; gap: 10px; background: none; border: none; color: var(--text-dim);
+    padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 13.5px; font-family: var(--font-display);
+    text-align: left; transition: background 0.12s, color 0.12s;
+  }
+  nav button svg { flex-shrink: 0; opacity: 0.75; }
+  nav button:hover { background: var(--panel-hover); color: var(--text); }
+  nav button.active { background: var(--panel); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+  nav button.active svg { opacity: 1; }
+
+  .sidebar-foot { padding: 10px 8px 0; border-top: 1px solid var(--border-soft); margin-top: 10px; }
+  .sidebar-foot .row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); padding: 4px 0; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--idle); flex-shrink: 0; }
+  .dot.on { background: var(--live); box-shadow: 0 0 6px var(--live-glow); }
+
+  /* --- Layout principal --- */
+  main { flex: 1; min-width: 0; }
+  .topbar {
+    padding: 18px 28px; border-bottom: 1px solid var(--border-soft); background: var(--bg);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .topbar h1 { margin: 0 0 2px; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  .topbar .sub { font-size: 12px; color: var(--muted); }
+
+  /* --- Bande de signaux (élément signature) --- */
+  .signal-rail {
+    display: flex; gap: 8px; overflow-x: auto; padding: 14px 28px; border-bottom: 1px solid var(--border-soft);
+    background: var(--bg-raised);
+  }
+  .signal-rail::-webkit-scrollbar { height: 4px; }
+  .signal-pill {
+    display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 999px; padding: 6px 14px 6px 10px; white-space: nowrap; flex-shrink: 0;
+  }
+  .pulse { width: 8px; height: 8px; border-radius: 50%; position: relative; flex-shrink: 0; }
+  .pulse.live { background: var(--live); }
+  .pulse.test { background: var(--test); }
+  .pulse.idle { background: var(--idle); }
+  .pulse.live::after, .pulse.test::after {
+    content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 1px solid currentColor;
+    animation: ping 2.2s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+  }
+  .pulse.live::after { color: var(--live); }
+  .pulse.test::after { color: var(--test); }
+  @keyframes ping { 0% { transform: scale(0.6); opacity: 0.9; } 100% { transform: scale(1.9); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .pulse::after { animation: none; display: none; } }
+  .signal-pill .name { font-size: 12.5px; font-weight: 500; }
+  .signal-pill .meta { font-size: 11px; color: var(--muted); }
+  .signal-empty { font-size: 12.5px; color: var(--muted); padding: 6px 4px; }
+
+  .content { padding: 24px 28px 40px; }
   .tab-content { display: none; }
   .tab-content.active { display: block; }
-  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
-  .card .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-  .card .value { font-size: 26px; font-weight: 600; }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 16px; }
-  .panel h2 { margin-top: 0; font-size: 15px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
-  th { color: var(--muted); font-weight: 500; }
-  .status-executed { color: var(--green); }
-  .status-error { color: var(--red); }
-  .status-ignored { color: var(--amber); }
-  form.keys-form { display: grid; grid-template-columns: 110px 1fr 1fr 1fr 90px 100px; gap: 10px; align-items: center; margin-bottom: 10px; }
-  form.keys-form.no-passphrase { grid-template-columns: 110px 1fr 1fr 90px 100px; }
-  input[type=text], input[type=password], input[type=number] { background: #0d0f14; border: 1px solid var(--border); color: var(--text); padding: 8px 10px; border-radius: 6px; width: 100%; }
-  button.save { background: var(--accent); color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; }
-  button.danger { background: var(--red); }
-  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
-  .toggle { width: 18px; height: 18px; }
-  .profile-form { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 20px; }
-  .profile-form label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
-  .profile-form .field { display: flex; flex-direction: column; }
-  .profile-card { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-  .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #1d2230; color: var(--muted); }
-  .badge.active { background: rgba(62,207,142,0.15); color: var(--green); }
+
+  h2 { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
+  .panel-desc { font-size: 12.5px; color: var(--muted); margin: 0 0 16px; }
+
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px;
+  }
+  .card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .card .value { font-family: var(--font-mono); font-size: 24px; font-weight: 600; }
+  .card .value.up { color: var(--live); }
+  .card .value.down { color: var(--down); }
+  .card .value.warn { color: var(--test); }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; margin-bottom: 16px; }
+
+  /* --- Sparkline --- */
+  .sparkline-wrap { display: flex; align-items: flex-end; gap: 14px; }
+  .sparkline-wrap svg { flex: 1; height: 90px; }
+
+  /* --- Tables --- */
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border-soft); }
+  th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td.mono, th.mono { font-family: var(--font-mono); }
+  .status-executed { color: var(--live); }
+  .status-error { color: var(--down); }
+  .status-ignored { color: var(--test); }
+  .filters { display: flex; gap: 8px; margin-bottom: 14px; }
+  .filters select { background: var(--bg-raised); border: 1px solid var(--border); color: var(--text); padding: 7px 10px; border-radius: 7px; font-size: 12.5px; }
+
+  /* --- Formulaires --- */
+  label { font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 5px; }
+  input[type=text], input[type=password], input[type=number], select {
+    background: var(--bg-raised); border: 1px solid var(--border); color: var(--text);
+    padding: 9px 11px; border-radius: 7px; width: 100%; font-family: var(--font-display); font-size: 13px;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  input[type=text].mono-input, input[type=number] { font-family: var(--font-mono); }
+  button.btn {
+    background: var(--accent); color: #1a1206; border: none; padding: 9px 16px; border-radius: 7px;
+    cursor: pointer; font-weight: 600; font-size: 13px; font-family: var(--font-display);
+  }
+  button.btn:hover { filter: brightness(1.08); }
+  button.btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); font-weight: 500; }
+  button.btn.danger { background: var(--down); color: white; }
+  button.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .keys-form { display: grid; grid-template-columns: 110px 1fr 1fr 1fr 100px 100px; gap: 10px; align-items: end; margin-bottom: 12px; }
+  .keys-form.no-passphrase { grid-template-columns: 110px 1fr 1fr 100px 100px; }
+  .keys-form .exname { font-weight: 600; padding-bottom: 9px; display: flex; align-items: center; }
+
+  .profile-form { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 20px; }
+  .field { display: flex; flex-direction: column; }
+
+  .badge { font-size: 10.5px; padding: 3px 9px; border-radius: 999px; background: var(--bg-raised); color: var(--muted); border: 1px solid var(--border); }
+  .badge.live { background: rgba(79,178,134,0.12); color: var(--live); border-color: transparent; }
+  .badge.test { background: rgba(217,180,90,0.12); color: var(--test); border-color: transparent; }
+
+  .profile-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px; }
+  .profile-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .profile-card .exchange-symbol { color: var(--muted); font-size: 12px; font-family: var(--font-mono); }
+  .gauge-row { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 8px; }
+  .gauge { min-width: 110px; }
+  .gauge .gauge-label { font-size: 10.5px; color: var(--muted); margin-bottom: 4px; }
+  .gauge-bar { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
+  .gauge-bar-fill { height: 100%; background: var(--accent); }
+  .gauge .gauge-val { font-family: var(--font-mono); font-size: 12px; margin-top: 3px; }
+
+  /* --- Terminal manuel --- */
+  .terminal-form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 640px; }
+  .side-toggle { display: flex; gap: 8px; }
+  .side-toggle button { flex: 1; padding: 10px; border-radius: 7px; border: 1px solid var(--border); background: var(--bg-raised); color: var(--text-dim); cursor: pointer; font-weight: 600; font-size: 13px; }
+  .side-toggle button.buy.active { background: rgba(79,178,134,0.15); border-color: var(--live); color: var(--live); }
+  .side-toggle button.sell.active { background: rgba(209,89,107,0.15); border-color: var(--down); color: var(--down); }
+  .terminal-result { margin-top: 16px; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border); font-family: var(--font-mono); font-size: 12.5px; white-space: pre-wrap; display: none; }
+  .terminal-result.show { display: block; }
+  .warn-box { background: rgba(217,180,90,0.08); border: 1px solid var(--test); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--test); margin-bottom: 16px; }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>Trading Automation</h1>
-  <span class="muted">Webhook actif sur /webhook</span>
-</header>
-
-<nav>
-  <button class="active" data-tab="overview">Vue d'ensemble</button>
-  <button data-tab="orders">Ordres</button>
-  <button data-tab="strategies">Stratégies</button>
-  <button data-tab="keys">Clés API</button>
-  <button data-tab="profiles">Profils / Réglages</button>
-</nav>
+<aside>
+  <div class="brand">
+    <div class="brand-mark">eT</div>
+    <div>
+      <div class="brand-name">eTrading</div>
+      <div class="brand-sub">Poste de contrôle</div>
+    </div>
+  </div>
+  <nav>
+    <button class="active" data-tab="overview">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 13V9M6 13V5M10 13V7M14 13V3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      Vue d'ensemble
+    </button>
+    <button data-tab="orders">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M2 6.5H14" stroke="currentColor" stroke-width="1.4"/></svg>
+      Ordres
+    </button>
+    <button data-tab="terminal">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 6.5L7 8.5L5 10.5M8.5 10.5H11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Terminal
+    </button>
+    <button data-tab="strategies">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M8 5V8L10 9.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      Stratégies
+    </button>
+    <button data-tab="profiles">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8H13M3 4H13M3 12H9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      Profils / Réglages
+    </button>
+    <button data-tab="keys">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="5.5" cy="10.5" r="2.5" stroke="currentColor" stroke-width="1.4"/><path d="M7.5 8.5L13 3M13 3V5.5M13 3H10.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Clés API
+    </button>
+  </nav>
+  <div class="sidebar-foot">
+    <div class="row"><span class="dot on"></span> Webhook actif — /webhook</div>
+    <div class="row" id="foot-time">—</div>
+  </div>
+</aside>
 
 <main>
-
-  <div id="overview" class="tab-content active">
-    <div class="grid">
-      <div class="card"><div class="label">Total ordres</div><div class="value" id="stat-total">—</div></div>
-      <div class="card"><div class="label">Exécutés</div><div class="value" style="color:var(--green)" id="stat-executed">—</div></div>
-      <div class="card"><div class="label">Erreurs</div><div class="value" style="color:var(--red)" id="stat-errors">—</div></div>
-      <div class="card"><div class="label">Ignorés</div><div class="value" style="color:var(--amber)" id="stat-ignored">—</div></div>
-    </div>
-    <div class="panel">
-      <h2>Plateformes disponibles</h2>
-      <p class="muted">
-        Crypto — Bybit, Kraken, OKX, Coinbase, Bitpanda (testnet/dry-run + réel)<br>
-        Forex — OANDA (pratique + réel), MT4/MT5 via MetaApi (à venir)
-      </p>
-    </div>
+  <div class="topbar">
+    <h1 id="page-title">Vue d'ensemble</h1>
+    <div class="sub" id="page-sub">État du bot et de vos plateformes connectées</div>
   </div>
 
-  <div id="orders" class="tab-content">
-    <div class="panel">
-      <h2>Historique des ordres</h2>
-      <table>
-        <thead><tr><th>Date</th><th>Exchange</th><th>Symbole</th><th>Sens</th><th>Qté</th><th>Statut</th><th>Détail</th></tr></thead>
-        <tbody id="orders-body"><tr><td colspan="7" class="muted">Chargement…</td></tr></tbody>
-      </table>
-    </div>
+  <div class="signal-rail" id="signal-rail">
+    <span class="signal-empty">Chargement des signaux…</span>
   </div>
 
-  <div id="strategies" class="tab-content">
-    <div class="panel">
-      <h2>Stratégies actives</h2>
-      <p class="muted">Une stratégie apparaît ici automatiquement dès la première alerte reçue pour ce couple exchange/symbole.</p>
-      <table>
-        <thead><tr><th>Exchange</th><th>Symbole</th><th>Active</th></tr></thead>
-        <tbody id="strategies-body"><tr><td colspan="3" class="muted">Chargement…</td></tr></tbody>
-      </table>
-    </div>
-  </div>
+  <div class="content">
 
-  <div id="keys" class="tab-content">
-    <div class="panel">
-      <h2>Clés API</h2>
-      <p class="muted">Les clés sont chiffrées localement et ne sont jamais réaffichées en clair. Pour OANDA : "API Key" = jeton d'accès, "API Secret" = identifiant de compte.</p>
-      <div id="keys-forms"></div>
-    </div>
-  </div>
+    <div id="overview" class="tab-content active">
+      <div class="grid">
+        <div class="card"><div class="label">Total ordres</div><div class="value mono" id="stat-total">—</div></div>
+        <div class="card"><div class="label">Exécutés</div><div class="value mono up" id="stat-executed">—</div></div>
+        <div class="card"><div class="label">Erreurs</div><div class="value mono down" id="stat-errors">—</div></div>
+        <div class="card"><div class="label">Ignorés (bloqués)</div><div class="value mono warn" id="stat-ignored">—</div></div>
+      </div>
 
-  <div id="profiles" class="tab-content">
-    <div class="panel">
-      <h2>Créer un profil / scénario</h2>
-      <p class="muted">Un profil regroupe tous les réglages du bot pour un couple exchange/symbole (ou "*" pour tout l'exchange). Enregistrez plusieurs scénarios (ex: "Agressif BTC", "Prudent forex nuit") et activez celui que vous voulez selon la conjoncture.</p>
-      <form id="profile-form" class="profile-form">
-        <div class="field"><label>Nom du profil</label><input type="text" name="name" placeholder="Ex: Prudent BTC" required></div>
-        <div class="field"><label>Exchange</label>
-          <select name="exchange">
-            <option value="bybit">Bybit</option><option value="kraken">Kraken</option>
-            <option value="okx">OKX</option><option value="coinbase">Coinbase</option>
-            <option value="bitpanda">Bitpanda</option><option value="oanda">OANDA</option>
-            <option value="mt5">MT5</option>
+      <div class="panel">
+        <h2>Activité cumulée</h2>
+        <p class="panel-desc">Ordres exécutés, jour par jour</p>
+        <div class="sparkline-wrap"><svg id="sparkline" viewBox="0 0 600 90" preserveAspectRatio="none"></svg></div>
+      </div>
+
+      <div class="panel">
+        <h2>Portefeuille par plateforme</h2>
+        <p class="panel-desc">Statut de connexion de chaque plateforme (le format de solde varie selon l'API — voir le détail brut par plateforme si besoin)</p>
+        <table>
+          <thead><tr><th>Plateforme</th><th>Statut</th><th>Mode</th></tr></thead>
+          <tbody id="portfolio-body"><tr><td colspan="3" class="mono" style="color:var(--muted)">Chargement…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="orders" class="tab-content">
+      <div class="panel">
+        <h2>Historique des ordres</h2>
+        <p class="panel-desc">Tous les ordres, quel que soit leur canal (webhook TradingView ou terminal manuel)</p>
+        <div class="filters">
+          <select id="filter-exchange"><option value="">Toutes les plateformes</option></select>
+          <select id="filter-status">
+            <option value="">Tous statuts</option>
+            <option value="executed">Exécuté</option>
+            <option value="error">Erreur</option>
+            <option value="ignored">Ignoré</option>
           </select>
         </div>
-        <div class="field"><label>Symbole (ou * pour tous)</label><input type="text" name="symbol" placeholder="BTCUSDT ou *" value="*"></div>
-        <div class="field"><label>Stop-loss (%)</label><input type="number" step="0.1" name="stop_loss_pct" placeholder="Ex: 2"></div>
-        <div class="field"><label>Take-profit (%)</label><input type="number" step="0.1" name="take_profit_pct" placeholder="Ex: 4"></div>
-        <div class="field"><label>Perte max/jour (nb ordres perdants)</label><input type="number" name="max_daily_loss" placeholder="Ex: 3"></div>
-        <div class="field"><label>Heure de début (UTC, 0-23)</label><input type="number" min="0" max="23" name="trading_start_hour" placeholder="Ex: 7"></div>
-        <div class="field"><label>Heure de fin (UTC, 0-23)</label><input type="number" min="0" max="23" name="trading_end_hour" placeholder="Ex: 21"></div>
-        <div class="field"><label>Liste blanche de symboles (séparés par virgule)</label><input type="text" name="symbol_whitelist" placeholder="BTCUSDT,ETHUSDT"></div>
-        <div class="field"><label>Trades simultanés max</label><input type="number" name="max_concurrent_trades" placeholder="Ex: 2"></div>
-        <div class="field"><label><input type="checkbox" name="is_active"> Activer immédiatement</label></div>
-        <div class="field"><button type="submit" class="save">Enregistrer le profil</button></div>
-      </form>
+        <table>
+          <thead><tr><th>Date</th><th>Exchange</th><th>Symbole</th><th>Sens</th><th class="mono">Qté</th><th>Statut</th><th>Détail</th></tr></thead>
+          <tbody id="orders-body"><tr><td colspan="7" style="color:var(--muted)">Chargement…</td></tr></tbody>
+        </table>
+      </div>
     </div>
-    <div class="panel">
-      <h2>Profils enregistrés</h2>
-      <div id="profiles-list"></div>
-    </div>
-  </div>
 
+    <div id="terminal" class="tab-content">
+      <div class="panel">
+        <h2>Terminal manuel</h2>
+        <p class="panel-desc">Passez un ordre directement, sans attendre une alerte TradingView. Utile pour tester une plateforme ou intervenir ponctuellement.</p>
+        <div class="warn-box">⚠ Un ordre passé ici est réel dès que le mode "Testnet/Dry-run" de la plateforme est désactivé dans l'onglet Clés API. Vérifiez toujours le mode avant de valider.</div>
+        <form id="terminal-form" class="terminal-form">
+          <div class="field">
+            <label>Plateforme</label>
+            <select name="exchange" id="terminal-exchange">
+              <option value="bybit">Bybit</option><option value="kraken">Kraken</option>
+              <option value="okx">OKX</option><option value="coinbase">Coinbase</option>
+              <option value="bitpanda">Bitpanda</option><option value="oanda">OANDA</option>
+              <option value="mt5">MT5</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Symbole</label>
+            <input type="text" name="symbol" class="mono-input" placeholder="BTCUSDT" required>
+          </div>
+          <div class="field">
+            <label>Sens</label>
+            <div class="side-toggle">
+              <button type="button" class="buy active" data-side="buy">Achat</button>
+              <button type="button" class="sell" data-side="sell">Vente</button>
+            </div>
+            <input type="hidden" name="side" value="buy">
+          </div>
+          <div class="field">
+            <label>Type d'ordre</label>
+            <select name="order_type" id="terminal-order-type">
+              <option value="market">Market</option>
+              <option value="limit">Limit</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Quantité</label>
+            <input type="number" step="any" name="quantity" required placeholder="0.001">
+          </div>
+          <div class="field" id="terminal-price-field" style="display:none">
+            <label>Prix limite</label>
+            <input type="number" step="any" name="price" placeholder="50000">
+          </div>
+          <div class="field">
+            <label><input type="checkbox" name="bypass_profile_checks"> Ignorer les vérifications de profil actif</label>
+          </div>
+          <div class="field">
+            <button type="submit" class="btn">Envoyer l'ordre</button>
+          </div>
+        </form>
+        <div class="terminal-result mono" id="terminal-result"></div>
+      </div>
+    </div>
+
+    <div id="strategies" class="tab-content">
+      <div class="panel">
+        <h2>Stratégies actives</h2>
+        <p class="panel-desc">Une stratégie apparaît automatiquement dès la première alerte reçue pour ce couple exchange/symbole.</p>
+        <table>
+          <thead><tr><th>Exchange</th><th>Symbole</th><th>Active</th></tr></thead>
+          <tbody id="strategies-body"><tr><td colspan="3" style="color:var(--muted)">Chargement…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="keys" class="tab-content">
+      <div class="panel">
+        <h2>Clés API</h2>
+        <p class="panel-desc">Chiffrées localement, jamais réaffichées en clair. Pour OANDA : "Jeton d'accès" / "ID de compte". Pour OKX, une passphrase supplémentaire est requise.</p>
+        <div id="keys-forms"></div>
+      </div>
+    </div>
+
+    <div id="profiles" class="tab-content">
+      <div class="panel">
+        <h2>Créer un profil / scénario</h2>
+        <p class="panel-desc">Réglages du bot pour un couple exchange/symbole (ou "*" pour tout l'exchange). Enregistrez plusieurs scénarios et activez celui qui correspond à la conjoncture.</p>
+        <form id="profile-form" class="profile-form">
+          <div class="field"><label>Nom du profil</label><input type="text" name="name" placeholder="Ex: Prudent BTC" required></div>
+          <div class="field"><label>Exchange</label>
+            <select name="exchange">
+              <option value="bybit">Bybit</option><option value="kraken">Kraken</option>
+              <option value="okx">OKX</option><option value="coinbase">Coinbase</option>
+              <option value="bitpanda">Bitpanda</option><option value="oanda">OANDA</option>
+              <option value="mt5">MT5</option>
+            </select>
+          </div>
+          <div class="field"><label>Symbole (ou * pour tous)</label><input type="text" class="mono-input" name="symbol" placeholder="BTCUSDT ou *" value="*"></div>
+          <div class="field"><label>Stop-loss (%)</label><input type="number" step="0.1" name="stop_loss_pct" placeholder="Ex: 2"></div>
+          <div class="field"><label>Take-profit (%)</label><input type="number" step="0.1" name="take_profit_pct" placeholder="Ex: 4"></div>
+          <div class="field"><label>Perte max/jour (nb ordres perdants)</label><input type="number" name="max_daily_loss" placeholder="Ex: 3"></div>
+          <div class="field"><label>Heure de début (UTC, 0-23)</label><input type="number" min="0" max="23" name="trading_start_hour" placeholder="Ex: 7"></div>
+          <div class="field"><label>Heure de fin (UTC, 0-23)</label><input type="number" min="0" max="23" name="trading_end_hour" placeholder="Ex: 21"></div>
+          <div class="field"><label>Liste blanche de symboles</label><input type="text" class="mono-input" name="symbol_whitelist" placeholder="BTCUSDT,ETHUSDT"></div>
+          <div class="field"><label>Trades simultanés max</label><input type="number" name="max_concurrent_trades" placeholder="Ex: 2"></div>
+          <div class="field"><label><input type="checkbox" name="is_active"> Activer immédiatement</label></div>
+          <div class="field"><button type="submit" class="btn">Enregistrer le profil</button></div>
+        </form>
+      </div>
+      <div class="panel">
+        <h2>Profils enregistrés</h2>
+        <div id="profiles-list"></div>
+      </div>
+    </div>
+
+  </div>
 </main>
 
 <script>
 const EXCHANGES = ["bybit", "kraken", "okx", "coinbase", "bitpanda", "oanda", "mt5"];
+const TITLES = {
+  overview: ["Vue d'ensemble", "État du bot et de vos plateformes connectées"],
+  orders: ["Ordres", "Historique complet, tous canaux confondus"],
+  terminal: ["Terminal", "Passer un ordre manuellement"],
+  strategies: ["Stratégies", "Activer ou mettre en pause par couple exchange/symbole"],
+  profiles: ["Profils / Réglages", "Vos scénarios de trading enregistrés"],
+  keys: ["Clés API", "Connexion à vos plateformes"],
+};
 
 document.querySelectorAll("nav button").forEach(btn => {
   btn.addEventListener("click", () => {
@@ -152,6 +421,9 @@ document.querySelectorAll("nav button").forEach(btn => {
     document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
     btn.classList.add("active");
     document.getElementById(btn.dataset.tab).classList.add("active");
+    const [title, sub] = TITLES[btn.dataset.tab];
+    document.getElementById("page-title").textContent = title;
+    document.getElementById("page-sub").textContent = sub;
   });
 });
 
@@ -161,34 +433,99 @@ async function fetchJSON(url, opts) {
   return res.json();
 }
 
-async function loadOrders() {
-  const orders = await fetchJSON("/api/orders");
-  document.getElementById("stat-total").textContent = orders.length;
-  document.getElementById("stat-executed").textContent = orders.filter(o => o.status === "executed").length;
-  document.getElementById("stat-errors").textContent = orders.filter(o => o.status === "error").length;
-  document.getElementById("stat-ignored").textContent = orders.filter(o => o.status === "ignored").length;
+function fmtTime() {
+  document.getElementById("foot-time").textContent = new Date().toLocaleTimeString("fr-FR");
+}
+setInterval(fmtTime, 1000);
+fmtTime();
 
+let allOrders = [];
+let allProfiles = [];
+let allKeysStatus = [];
+
+async function loadOrders() {
+  allOrders = await fetchJSON("/api/orders");
+  renderStats();
+  renderSparkline();
+  renderOrdersTable();
+  renderSignalRail();
+}
+
+function renderStats() {
+  document.getElementById("stat-total").textContent = allOrders.length;
+  document.getElementById("stat-executed").textContent = allOrders.filter(o => o.status === "executed").length;
+  document.getElementById("stat-errors").textContent = allOrders.filter(o => o.status === "error").length;
+  document.getElementById("stat-ignored").textContent = allOrders.filter(o => o.status === "ignored").length;
+}
+
+function renderSparkline() {
+  const svg = document.getElementById("sparkline");
+  const executed = allOrders.filter(o => o.status === "executed").slice().reverse();
+  if (executed.length < 2) {
+    svg.innerHTML = '<text x="10" y="45" fill="var(--muted)" font-size="12" font-family="IBM Plex Mono">Pas assez de données pour un graphique.</text>';
+    return;
+  }
+  const byDay = {};
+  for (const o of executed) {
+    const day = o.created_at.slice(0, 10);
+    byDay[day] = (byDay[day] || 0) + 1;
+  }
+  const days = Object.keys(byDay).sort();
+  let cumul = 0;
+  const points = days.map(d => { cumul += byDay[d]; return cumul; });
+  const max = Math.max(...points, 1);
+  const w = 600, h = 90, pad = 6;
+  const stepX = (w - pad * 2) / Math.max(points.length - 1, 1);
+  const coords = points.map((v, i) => {
+    const x = pad + i * stepX;
+    const y = h - pad - (v / max) * (h - pad * 2);
+    return [x, y];
+  });
+  const path = coords.map((c, i) => (i === 0 ? "M" : "L") + c[0].toFixed(1) + "," + c[1].toFixed(1)).join(" ");
+  const areaPath = path + ` L${coords[coords.length-1][0].toFixed(1)},${h} L${coords[0][0].toFixed(1)},${h} Z`;
+  svg.innerHTML = `
+    <defs><linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+    </linearGradient></defs>
+    <path d="${areaPath}" fill="url(#grad)" />
+    <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="1.6" />
+  `;
+}
+
+function renderOrdersTable() {
+  const exFilter = document.getElementById("filter-exchange").value;
+  const statusFilter = document.getElementById("filter-status").value;
+  const filtered = allOrders.filter(o =>
+    (!exFilter || o.exchange === exFilter) && (!statusFilter || o.status === statusFilter)
+  );
   const body = document.getElementById("orders-body");
-  body.innerHTML = orders.length ? "" : '<tr><td colspan="7" class="muted">Aucun ordre pour le moment.</td></tr>';
-  for (const o of orders) {
+  body.innerHTML = filtered.length ? "" : '<tr><td colspan="7" style="color:var(--muted)">Aucun ordre pour ces filtres.</td></tr>';
+  for (const o of filtered) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${new Date(o.created_at).toLocaleString()}</td><td>${o.exchange}</td><td>${o.symbol}</td>
-      <td>${o.side}</td><td>${o.quantity}</td><td class="status-${o.status}">${o.status}</td><td class="muted">${o.detail || ""}</td>`;
+    tr.innerHTML = `<td class="mono">${new Date(o.created_at).toLocaleString("fr-FR")}</td><td>${o.exchange}</td><td class="mono">${o.symbol}</td>
+      <td>${o.side}</td><td class="mono">${o.quantity}</td><td class="status-${o.status}">${o.status}</td><td style="color:var(--muted)">${o.detail || ""}</td>`;
     body.appendChild(tr);
   }
+}
+document.getElementById("filter-exchange").addEventListener("change", renderOrdersTable);
+document.getElementById("filter-status").addEventListener("change", renderOrdersTable);
+for (const ex of EXCHANGES) {
+  const opt = document.createElement("option"); opt.value = ex; opt.textContent = ex;
+  document.getElementById("filter-exchange").appendChild(opt);
 }
 
 async function loadStrategies() {
   const strategies = await fetchJSON("/api/strategies");
   const body = document.getElementById("strategies-body");
-  body.innerHTML = strategies.length ? "" : '<tr><td colspan="3" class="muted">Aucune stratégie pour le moment.</td></tr>';
+  body.innerHTML = strategies.length ? "" : '<tr><td colspan="3" style="color:var(--muted)">Aucune stratégie pour le moment.</td></tr>';
   for (const s of strategies) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${s.exchange}</td><td>${s.symbol}</td>
-      <td><input type="checkbox" class="toggle" data-exchange="${s.exchange}" data-symbol="${s.symbol}" ${s.enabled ? "checked" : ""}></td>`;
+    tr.innerHTML = `<td>${s.exchange}</td><td class="mono">${s.symbol}</td>
+      <td><input type="checkbox" data-exchange="${s.exchange}" data-symbol="${s.symbol}" ${s.enabled ? "checked" : ""}></td>`;
     body.appendChild(tr);
   }
-  body.querySelectorAll(".toggle").forEach(cb => {
+  body.querySelectorAll("input[type=checkbox]").forEach(cb => {
     cb.addEventListener("change", async () => {
       await fetchJSON("/api/strategies/toggle", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -199,10 +536,10 @@ async function loadStrategies() {
 }
 
 async function loadKeys() {
-  const keys = await fetchJSON("/api/keys");
+  allKeysStatus = await fetchJSON("/api/keys");
   const container = document.getElementById("keys-forms");
   container.innerHTML = "";
-  for (const k of keys) {
+  for (const k of allKeysStatus) {
     if (k.exchange === "okx_passphrase") continue;
     const isOkx = k.exchange === "okx";
     const secretLabel = k.exchange === "oanda" ? "ID de compte" : (k.exchange === "mt5" ? "Token MetaApi" : "API Secret");
@@ -210,12 +547,12 @@ async function loadKeys() {
     const form = document.createElement("form");
     form.className = "keys-form" + (isOkx ? "" : " no-passphrase");
     form.innerHTML = `
-      <strong>${k.exchange}${k.configured ? " ✅" : ""}</strong>
-      <input type="text" placeholder="${keyLabel}" name="api_key">
-      <input type="password" placeholder="${secretLabel}" name="api_secret">
-      ${isOkx ? '<input type="password" placeholder="Passphrase OKX" name="okx_passphrase">' : ""}
-      <label class="muted"><input type="checkbox" name="testnet" ${k.testnet === undefined || k.testnet ? "checked" : ""}> Testnet/Dry-run</label>
-      <button type="submit" class="save">Enregistrer</button>
+      <div class="exname">${k.exchange}${k.configured ? " ✅" : ""}</div>
+      <div class="field" style="margin:0"><input type="text" placeholder="${keyLabel}" name="api_key"></div>
+      <div class="field" style="margin:0"><input type="password" placeholder="${secretLabel}" name="api_secret"></div>
+      ${isOkx ? '<div class="field" style="margin:0"><input type="password" placeholder="Passphrase OKX" name="okx_passphrase"></div>' : ""}
+      <label style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" name="testnet" ${k.testnet === undefined || k.testnet ? "checked" : ""} style="width:auto"> Testnet</label>
+      <button type="submit" class="btn">Enregistrer</button>
     `;
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -223,61 +560,84 @@ async function loadKeys() {
       await fetchJSON("/api/keys", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          exchange: k.exchange,
-          api_key: fd.get("api_key"),
-          api_secret: fd.get("api_secret"),
-          testnet: fd.get("testnet") === "on",
-          okx_passphrase: fd.get("okx_passphrase") || null,
+          exchange: k.exchange, api_key: fd.get("api_key"), api_secret: fd.get("api_secret"),
+          testnet: fd.get("testnet") === "on", okx_passphrase: fd.get("okx_passphrase") || null,
         }),
       });
-      loadKeys();
+      loadKeys(); loadPortfolio();
     });
     container.appendChild(form);
   }
 }
 
+async function loadPortfolio() {
+  const portfolio = await fetchJSON("/api/portfolio");
+  const body = document.getElementById("portfolio-body");
+  body.innerHTML = "";
+  for (const ex of EXCHANGES) {
+    const p = portfolio[ex] || { configured: false };
+    const keyInfo = allKeysStatus.find(k => k.exchange === ex) || {};
+    const tr = document.createElement("tr");
+    const statusTxt = !p.configured ? '<span style="color:var(--muted)">Non configuré</span>'
+      : (p.status === "ok" ? '<span class="status-executed">Connecté</span>' : `<span class="status-error">${p.detail || "Erreur"}</span>`);
+    const modeBadge = !p.configured ? "" : (keyInfo.testnet ? '<span class="badge test">Testnet/Dry-run</span>' : '<span class="badge live">Réel</span>');
+    tr.innerHTML = `<td>${ex}</td><td>${statusTxt}</td><td>${modeBadge}</td>`;
+    body.appendChild(tr);
+  }
+}
+
+function renderSignalRail() {
+  const rail = document.getElementById("signal-rail");
+  if (!allProfiles.length) {
+    rail.innerHTML = '<span class="signal-empty">Aucun profil actif — le bot applique les alertes sans restriction.</span>';
+    return;
+  }
+  rail.innerHTML = "";
+  for (const p of allProfiles) {
+    const keyInfo = allKeysStatus.find(k => k.exchange === p.exchange) || {};
+    const pulseClass = !p.is_active ? "idle" : (keyInfo.testnet === false ? "live" : "test");
+    const pill = document.createElement("div");
+    pill.className = "signal-pill";
+    pill.innerHTML = `<span class="pulse ${pulseClass}"></span>
+      <span class="name">${p.name}</span>
+      <span class="meta">${p.exchange}/${p.symbol}</span>`;
+    rail.appendChild(pill);
+  }
+}
+
 async function loadProfiles() {
-  const profiles = await fetchJSON("/api/profiles");
+  allProfiles = await fetchJSON("/api/profiles");
   const container = document.getElementById("profiles-list");
-  container.innerHTML = profiles.length ? "" : '<p class="muted">Aucun profil enregistré.</p>';
-  for (const p of profiles) {
+  container.innerHTML = allProfiles.length ? "" : '<p style="color:var(--muted);font-size:12.5px">Aucun profil enregistré.</p>';
+  for (const p of allProfiles) {
     const div = document.createElement("div");
     div.className = "profile-card";
     const s = p.settings;
-    const details = [
-      s.stop_loss_pct ? `SL ${s.stop_loss_pct}%` : null,
-      s.take_profit_pct ? `TP ${s.take_profit_pct}%` : null,
-      s.max_daily_loss ? `Max ${s.max_daily_loss} pertes/j` : null,
-      (s.trading_start_hour !== null && s.trading_end_hour !== null) ? `${s.trading_start_hour}h-${s.trading_end_hour}h UTC` : null,
-      s.symbol_whitelist ? `Symboles: ${s.symbol_whitelist}` : null,
-      s.max_concurrent_trades ? `Max ${s.max_concurrent_trades} trades simultanés` : null,
-    ].filter(Boolean).join(" · ");
+    const sl = s.stop_loss_pct, tp = s.take_profit_pct;
     div.innerHTML = `
-      <div>
-        <strong>${p.name}</strong> <span class="badge ${p.is_active ? "active" : ""}">${p.is_active ? "ACTIF" : "inactif"}</span><br>
-        <span class="muted">${p.exchange} / ${p.symbol} — ${details || "aucun réglage"}</span>
+      <div class="profile-card-top">
+        <div><strong>${p.name}</strong> <span class="badge ${p.is_active ? 'live' : ''}">${p.is_active ? "ACTIF" : "inactif"}</span></div>
+        <div>
+          ${p.is_active ? `<button class="btn ghost deactivate" data-id="${p.id}">Désactiver</button>` : `<button class="btn activate" data-id="${p.id}">Activer</button>`}
+          <button class="btn danger delete" data-id="${p.id}">Supprimer</button>
+        </div>
       </div>
-      <div>
-        ${p.is_active
-          ? `<button class="ghost deactivate" data-id="${p.id}">Désactiver</button>`
-          : `<button class="save activate" data-id="${p.id}">Activer</button>`}
-        <button class="danger delete" data-id="${p.id}">Supprimer</button>
+      <div class="exchange-symbol">${p.exchange} / ${p.symbol}</div>
+      <div class="gauge-row">
+        ${sl ? `<div class="gauge"><div class="gauge-label">Stop-loss</div><div class="gauge-bar"><div class="gauge-bar-fill" style="width:${Math.min(sl*10,100)}%;background:var(--down)"></div></div><div class="gauge-val">-${sl}%</div></div>` : ""}
+        ${tp ? `<div class="gauge"><div class="gauge-label">Take-profit</div><div class="gauge-bar"><div class="gauge-bar-fill" style="width:${Math.min(tp*10,100)}%;background:var(--live)"></div></div><div class="gauge-val">+${tp}%</div></div>` : ""}
+        ${s.max_daily_loss ? `<div class="gauge"><div class="gauge-label">Coupe-circuit</div><div class="gauge-val">${s.max_daily_loss} pertes/j max</div></div>` : ""}
+        ${(s.trading_start_hour !== null && s.trading_start_hour !== undefined) ? `<div class="gauge"><div class="gauge-label">Plage horaire (UTC)</div><div class="gauge-val">${s.trading_start_hour}h–${s.trading_end_hour}h</div></div>` : ""}
+        ${s.max_concurrent_trades ? `<div class="gauge"><div class="gauge-label">Trades simultanés</div><div class="gauge-val">max ${s.max_concurrent_trades}</div></div>` : ""}
+        ${s.symbol_whitelist ? `<div class="gauge"><div class="gauge-label">Symboles autorisés</div><div class="gauge-val">${s.symbol_whitelist}</div></div>` : ""}
       </div>
     `;
     container.appendChild(div);
   }
-  container.querySelectorAll(".activate").forEach(b => b.addEventListener("click", async () => {
-    await fetchJSON(`/api/profiles/${b.dataset.id}/activate`, { method: "POST" });
-    loadProfiles();
-  }));
-  container.querySelectorAll(".deactivate").forEach(b => b.addEventListener("click", async () => {
-    await fetchJSON(`/api/profiles/${b.dataset.id}/deactivate`, { method: "POST" });
-    loadProfiles();
-  }));
-  container.querySelectorAll(".delete").forEach(b => b.addEventListener("click", async () => {
-    await fetchJSON(`/api/profiles/${b.dataset.id}`, { method: "DELETE" });
-    loadProfiles();
-  }));
+  container.querySelectorAll(".activate").forEach(b => b.addEventListener("click", async () => { await fetchJSON(`/api/profiles/${b.dataset.id}/activate`, { method: "POST" }); loadProfiles(); }));
+  container.querySelectorAll(".deactivate").forEach(b => b.addEventListener("click", async () => { await fetchJSON(`/api/profiles/${b.dataset.id}/deactivate`, { method: "POST" }); loadProfiles(); }));
+  container.querySelectorAll(".delete").forEach(b => b.addEventListener("click", async () => { await fetchJSON(`/api/profiles/${b.dataset.id}`, { method: "DELETE" }); loadProfiles(); }));
+  renderSignalRail();
 }
 
 document.getElementById("profile-form").addEventListener("submit", async (e) => {
@@ -287,16 +647,11 @@ document.getElementById("profile-form").addEventListener("submit", async (e) => 
   await fetchJSON("/api/profiles", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      name: fd.get("name"),
-      exchange: fd.get("exchange"),
-      symbol: fd.get("symbol") || "*",
+      name: fd.get("name"), exchange: fd.get("exchange"), symbol: fd.get("symbol") || "*",
       is_active: fd.get("is_active") === "on",
-      stop_loss_pct: toNum(fd.get("stop_loss_pct")),
-      take_profit_pct: toNum(fd.get("take_profit_pct")),
-      max_daily_loss: toNum(fd.get("max_daily_loss")),
-      trading_start_hour: toNum(fd.get("trading_start_hour")),
-      trading_end_hour: toNum(fd.get("trading_end_hour")),
-      symbol_whitelist: fd.get("symbol_whitelist") || null,
+      stop_loss_pct: toNum(fd.get("stop_loss_pct")), take_profit_pct: toNum(fd.get("take_profit_pct")),
+      max_daily_loss: toNum(fd.get("max_daily_loss")), trading_start_hour: toNum(fd.get("trading_start_hour")),
+      trading_end_hour: toNum(fd.get("trading_end_hour")), symbol_whitelist: fd.get("symbol_whitelist") || null,
       max_concurrent_trades: toNum(fd.get("max_concurrent_trades")),
     }),
   });
@@ -304,14 +659,53 @@ document.getElementById("profile-form").addEventListener("submit", async (e) => 
   loadProfiles();
 });
 
+// --- Terminal manuel ---
+document.querySelectorAll(".side-toggle button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".side-toggle button").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelector('#terminal-form input[name=side]').value = btn.dataset.side;
+  });
+});
+document.getElementById("terminal-order-type").addEventListener("change", (e) => {
+  document.getElementById("terminal-price-field").style.display = e.target.value === "limit" ? "flex" : "none";
+});
+document.getElementById("terminal-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const resultBox = document.getElementById("terminal-result");
+  resultBox.className = "terminal-result mono show";
+  resultBox.textContent = "Envoi en cours…";
+  try {
+    const res = await fetchJSON("/api/manual-order", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        exchange: fd.get("exchange"), symbol: fd.get("symbol"), side: fd.get("side"),
+        order_type: fd.get("order_type"), quantity: Number(fd.get("quantity")),
+        price: fd.get("price") ? Number(fd.get("price")) : null,
+        bypass_profile_checks: fd.get("bypass_profile_checks") === "on",
+      }),
+    });
+    resultBox.textContent = JSON.stringify(res, null, 2);
+    resultBox.style.borderColor = res.status === "executed" ? "var(--live)" : (res.status === "error" ? "var(--down)" : "var(--test)");
+    loadOrders();
+  } catch (err) {
+    resultBox.textContent = "Erreur: " + err.message;
+    resultBox.style.borderColor = "var(--down)";
+  }
+});
+
 async function refreshAll() {
   await Promise.all([loadOrders(), loadStrategies()]);
 }
 
-loadKeys();
-loadProfiles();
-refreshAll();
-setInterval(refreshAll, 5000);
+(async function init() {
+  await loadKeys();
+  await loadProfiles();
+  await loadPortfolio();
+  await refreshAll();
+  setInterval(refreshAll, 5000);
+})();
 </script>
 
 </body>
