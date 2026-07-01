@@ -17,10 +17,31 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM --- Cherche une version Python compatible (3.11/3.12/3.13) via le
+REM     lanceur "py", pour eviter les versions trop recentes (ex: 3.14)
+REM     qui n'ont pas encore de paquets precompiles pour certaines librairies.
+set "PYCMD="
+py -3.12 --version >nul 2>nul && set "PYCMD=py -3.12"
+if not defined PYCMD (py -3.13 --version >nul 2>nul && set "PYCMD=py -3.13")
+if not defined PYCMD (py -3.11 --version >nul 2>nul && set "PYCMD=py -3.11")
+if not defined PYCMD (
+    echo [ATTENTION] Aucune version Python 3.11/3.12/3.13 detectee.
+    echo Ce projet est plus fiable avec l'une de ces versions ^(les
+    echo versions tres recentes de Python, comme 3.14, manquent parfois
+    echo de paquets precompiles pour certaines dependances^).
+    echo.
+    echo Si l'installation qui suit echoue, installez Python 3.12 depuis
+    echo https://python.org ^(cochez "Add python.exe to PATH"^), supprimez
+    echo le dossier "venv" de ce projet, puis relancez ce script.
+    echo.
+    set "PYCMD=python"
+)
+echo Python utilise: %PYCMD%
+
 REM --- Cree l'environnement virtuel s'il n'existe pas ---
 if not exist "venv\Scripts\activate.bat" (
     echo [1/4] Creation de l'environnement virtuel...
-    python -m venv venv
+    %PYCMD% -m venv venv
 ) else (
     echo [1/4] Environnement virtuel deja present.
 )
