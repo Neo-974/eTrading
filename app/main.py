@@ -188,6 +188,13 @@ class ManualOrderInput(BaseModel):
     bypass_profile_checks: bool = False
 
 
+class PositionSizeInput(BaseModel):
+    exchange: str
+    symbol: str
+    risk_pct: float  # % du capital que l'on accepte de perdre sur ce trade
+    stop_loss_pct: float  # distance du stop-loss, en % du prix actuel
+
+
 def _log_order(exchange, symbol, side, quantity, order_type, price, status, detail):
     now = datetime.now(timezone.utc).isoformat()
     with get_conn() as conn:
@@ -294,6 +301,71 @@ def manual_order(payload: ManualOrderInput, _auth: bool = Depends(require_dashbo
         payload.order_type, payload.price, skip_risk_checks=payload.bypass_profile_checks, source="manual",
     )
     return result
+
+
+@app.post("/api/position-size")
+def compute_position_size(payload: PositionSizeInput, _auth: bool = Depends(require_dashboard_auth)):
+    """Calcule la quantité (en unités) correspondant à un risque en % du capital,
+    étant donné une distance de stop-loss. Disponible uniquement pour OANDA pour
+    l'instant : c'est la seule plateforme où le solde du compte est normalisé
+    dans une seule devise, sans ambiguïté de wallet/marge comme sur les exchanges crypto."""
+    if payload.exchange.lower() != "oanda":
+        raise HTTPException(status_code=400, detail="Le calcul automatique de taille de position n'est disponible que pour OANDA pour le moment.")
+
+    adapter = build_adapter("oanda")
+    if adapter is None or not adapter.is_configured():
+        raise HTTPException(status_code=400, detail="Configurez d'abord vos clés OANDA (onglet Clés API).")
+
+    try:
+        capital = adapter.get_capital_info()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Impossible de récupérer le solde OANDA: {e}")
+
+    try:
+        candles = adapter.get_candles(payload.symbol, interval="1h", limit=2)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Impossible de récupérer le prix actuel: {e}")
+    if not candles:
+        raise HTTPException(status_code=400, detail="Aucune donnée de prix disponible pour ce symbole.")
+    last_price = candles[-1]["close"]
+
+    symbol = payload.symbol.upper()
+    parts = symbol.split("_")
+    if len(parts) != 2:
+        raise HTTPException(status_code=400, detail="Symbole OANDA invalide, format attendu BASE_QUOTE (ex: EUR_USD).")
+    base_ccy, quote_ccy = parts
+    account_ccy = capital["currency"].upper()
+
+    if payload.stop_loss_pct <= 0 or payload.risk_pct <= 0:
+        raise HTTPException(status_code=400, detail="Le risque et la distance du stop-loss doivent être positifs.")
+
+    risk_amount = capital["nav"] * (payload.risk_pct / 100)
+    stop_distance_price = last_price * (payload.stop_loss_pct / 100)
+
+    if account_ccy == quote_ccy:
+        units = risk_amount / stop_distance_price
+        note = f"Compte en {account_ccy} = devise de cotation de {symbol} : calcul direct, aucune conversion nécessaire."
+    elif account_ccy == base_ccy:
+        units = (risk_amount * last_price) / stop_distance_price
+        note = f"Compte en {account_ccy} = devise de base de {symbol} : conversion appliquée via le prix actuel ({last_price})."
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=(f"Calcul non supporté pour cette paire : votre compte est en {account_ccy}, qui n'est ni la "
+                     f"devise de base ni la devise de cotation de {symbol} (nécessiterait une conversion via un "
+                     f"taux de change tiers). Utilisez une paire incluant {account_ccy}, ou dimensionnez manuellement."),
+        )
+
+    return {
+        "status": "ok",
+        "units": round(units, 0),
+        "risk_amount": round(risk_amount, 2),
+        "account_currency": account_ccy,
+        "nav": capital["nav"],
+        "last_price": last_price,
+        "stop_distance_price": round(stop_distance_price, 5),
+        "note": note,
+    }
 
 
 @app.get("/api/portfolio")

@@ -424,7 +424,7 @@
           </div>
           <div class="field">
             <label>Quantité</label>
-            <input type="number" step="any" name="quantity" required placeholder="0.001">
+            <input type="number" step="any" name="quantity" id="terminal-quantity" required placeholder="0.001">
           </div>
           <div class="field" id="terminal-price-field" style="display:none">
             <label>Prix limite</label>
@@ -438,6 +438,20 @@
           </div>
         </form>
         <div class="terminal-result mono" id="terminal-result"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Calculateur de taille de position <span class="badge live">OANDA uniquement</span></h2>
+        <p class="panel-desc">Vous définissez le risque accepté (% du capital) et la distance de votre stop-loss (% du prix) — le calcul vous donne la quantité exacte à trader pour respecter ce risque, sur la base de votre solde OANDA réel et du dernier prix connu.</p>
+        <div class="terminal-form">
+          <div class="field"><label>Symbole (format OANDA, ex: EUR_USD)</label><input type="text" id="sizing-symbol" class="mono-input" value="EUR_USD"></div>
+          <div class="field range-field"><label>Risque accepté : <span class="range-val" id="val-sizing-risk">1</span>% du capital</label>
+            <input type="range" id="sizing-risk" min="0.1" max="10" step="0.1" value="1"></div>
+          <div class="field range-field"><label>Distance du stop-loss : <span class="range-val" id="val-sizing-sl">0.5</span>% du prix</label>
+            <input type="range" id="sizing-sl" min="0.05" max="5" step="0.05" value="0.5"></div>
+          <div class="field" style="align-self:flex-end"><button type="button" class="btn" id="sizing-compute">Calculer</button></div>
+        </div>
+        <div class="terminal-result mono" id="sizing-result"></div>
       </div>
     </div>
 
@@ -1131,6 +1145,41 @@ document.getElementById("chart-save-profile").addEventListener("click", async ()
     resultBox.style.borderColor = "var(--live)";
     resultBox.textContent = `Profil "${name}" enregistré (SL -${slPct.toFixed(2)}% / TP +${tpPct.toFixed(2)}%). Activez-le depuis l'onglet Profils.`;
     loadProfiles();
+  } catch (err) {
+    resultBox.style.borderColor = "var(--down)";
+    resultBox.textContent = "Erreur: " + err.message;
+  }
+});
+
+// --- Calculateur de taille de position (OANDA) ---
+document.getElementById("sizing-risk").addEventListener("input", (e) => {
+  document.getElementById("val-sizing-risk").textContent = e.target.value;
+});
+document.getElementById("sizing-sl").addEventListener("input", (e) => {
+  document.getElementById("val-sizing-sl").textContent = e.target.value;
+});
+document.getElementById("sizing-compute").addEventListener("click", async () => {
+  const resultBox = document.getElementById("sizing-result");
+  resultBox.className = "terminal-result mono show";
+  resultBox.textContent = "Calcul en cours…";
+  const symbol = document.getElementById("sizing-symbol").value.trim();
+  const riskPct = Number(document.getElementById("sizing-risk").value);
+  const slPct = Number(document.getElementById("sizing-sl").value);
+  try {
+    const res = await fetchJSON("/api/position-size", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ exchange: "oanda", symbol, risk_pct: riskPct, stop_loss_pct: slPct }),
+    });
+    resultBox.style.borderColor = "var(--live)";
+    resultBox.innerHTML = `Quantité suggérée : <strong>${res.units} unités</strong>\n` +
+      `Risque : ${res.risk_amount} ${res.account_currency} (${riskPct}% du NAV de ${res.nav} ${res.account_currency})\n` +
+      `Dernier prix : ${res.last_price} — distance SL : ${res.stop_distance_price}\n` +
+      `${res.note}\n\n` +
+      `<button type="button" class="btn" id="sizing-use">Utiliser cette quantité dans le terminal</button>`;
+    document.getElementById("sizing-use").addEventListener("click", () => {
+      document.getElementById("terminal-exchange").value = "oanda";
+      document.getElementById("terminal-quantity").value = res.units;
+    });
   } catch (err) {
     resultBox.style.borderColor = "var(--down)";
     resultBox.textContent = "Erreur: " + err.message;

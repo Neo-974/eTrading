@@ -37,6 +37,11 @@ class ExchangeAdapter(ABC):
         si la plateforme n'a pas de connecteur de données de marché."""
         raise NotImplementedError(f"Graphique non disponible pour {self.name}")
 
+    def get_capital_info(self) -> dict:
+        """Retourne le solde du compte normalisé (balance, nav, currency).
+        Optionnel : lève NotImplementedError si non supporté pour cette plateforme."""
+        raise NotImplementedError(f"Calcul de taille de position non disponible pour {self.name}")
+
 
 class NotConfiguredError(Exception):
     """Levée quand un adapter est appelé sans clés API configurées."""

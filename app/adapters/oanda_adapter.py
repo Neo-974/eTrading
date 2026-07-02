@@ -100,6 +100,21 @@ class OandaAdapter(ExchangeAdapter):
         except requests.RequestException as e:
             return {"status": "error", "detail": f"Erreur réseau OANDA: {e}"}
 
+    def get_capital_info(self) -> dict:
+        """Retourne le solde du compte normalisé pour le calcul de taille de position."""
+        if not self.is_configured():
+            raise NotConfiguredError("Jeton d'accès ou identifiant de compte OANDA manquant")
+        url = f"{self.base_url}/v3/accounts/{self.account_id}/summary"
+        resp = requests.get(url, headers=self._headers(), timeout=10)
+        resp.raise_for_status()
+        account = resp.json()["account"]
+        return {
+            "balance": float(account["balance"]),
+            "nav": float(account["NAV"]),
+            "currency": account["currency"],
+            "margin_available": float(account.get("marginAvailable", 0)),
+        }
+
     def get_candles(self, symbol: str, interval: str = "1h", limit: int = 200) -> list:
         if not self.is_configured():
             raise NotImplementedError("Configurez d'abord vos clés OANDA pour voir le graphique (pas de données publiques sans authentification).")
