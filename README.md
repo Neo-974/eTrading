@@ -138,6 +138,21 @@ Dashboard rafraîchi automatiquement toutes les 5 secondes :
 
 ---
 
+## 8. Assistant intégré (optionnel)
+
+Un onglet **"Assistant"** vous accompagne pour régler votre stratégie, en
+dialoguant directement avec Claude (API Anthropic — clé personnelle,
+facturée à l'usage, distincte d'un abonnement Claude.ai) :
+
+1. Créez une clé sur https://console.anthropic.com/
+2. Ajoutez-la dans `.env` : `ANTHROPIC_API_KEY=sk-ant-...`
+3. Redémarrez le serveur
+
+L'assistant voit automatiquement vos profils actifs, vos plateformes
+configurées et votre activité du jour (décochez la case "Inclure mes
+profils..." si vous préférez une discussion sans ce contexte). Il conseille
+et explique — il ne modifie jamais vos réglages ni ne passe d'ordre lui-même.
+
 ## Prochaines étapes (sur demande)
 
 - **MT4/MT5 via MetaApi** (Phase 4)

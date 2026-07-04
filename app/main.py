@@ -2,6 +2,7 @@ import logging
 import os
 import secrets
 import json as _json
+import requests
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -13,6 +14,7 @@ from pydantic import BaseModel, Field
 
 import risk_manager
 import strategy_analyzer
+import assistant
 from adapters.bitpanda_adapter import BitpandaAdapter
 from adapters.bybit_adapter import BybitAdapter
 from adapters.coinbase_adapter import CoinbaseAdapter
@@ -195,6 +197,17 @@ class PositionSizeInput(BaseModel):
     stop_loss_pct: float  # distance du stop-loss, en % du prix actuel
 
 
+class AssistantMessage(BaseModel):
+    role: str  # "user" ou "assistant"
+    content: str
+
+
+class AssistantChatInput(BaseModel):
+    message: str
+    history: list[AssistantMessage] = []
+    include_context: bool = True
+
+
 def _log_order(exchange, symbol, side, quantity, order_type, price, status, detail):
     now = datetime.now(timezone.utc).isoformat()
     with get_conn() as conn:
@@ -366,6 +379,28 @@ def compute_position_size(payload: PositionSizeInput, _auth: bool = Depends(requ
         "stop_distance_price": round(stop_distance_price, 5),
         "note": note,
     }
+
+
+@app.get("/api/assistant/status")
+def assistant_status(_auth: bool = Depends(require_dashboard_auth)):
+    return {"configured": bool(settings.ANTHROPIC_API_KEY), "model": settings.ANTHROPIC_MODEL}
+
+
+@app.post("/api/assistant/chat")
+def assistant_chat(payload: AssistantChatInput, _auth: bool = Depends(require_dashboard_auth)):
+    if not settings.ANTHROPIC_API_KEY:
+        raise HTTPException(
+            status_code=400,
+            detail="Clé API Anthropic non configurée. Ajoutez ANTHROPIC_API_KEY dans votre fichier .env (voir .env.example) puis redémarrez le serveur.",
+        )
+    try:
+        history = [{"role": m.role, "content": m.content} for m in payload.history]
+        reply = assistant.chat(payload.message, history, include_context=payload.include_context)
+        return {"status": "ok", "reply": reply}
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Erreur de connexion à l'API Anthropic: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur assistant: {e}")
 
 
 @app.get("/api/portfolio")

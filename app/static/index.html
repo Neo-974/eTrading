@@ -231,6 +231,16 @@
   .pending-card { display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--test); background: rgba(217,180,90,0.06); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 10px; }
   .pending-card .meta { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
 
+  /* --- Assistant --- */
+  .assistant-messages { display: flex; flex-direction: column; gap: 12px; max-height: 480px; overflow-y: auto; padding: 4px 2px 12px; margin-bottom: 12px; }
+  .assistant-msg { max-width: 78%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+  .assistant-msg.user { align-self: flex-end; background: var(--accent); color: #1a1206; border-bottom-right-radius: 3px; }
+  .assistant-msg.bot { align-self: flex-start; background: var(--panel-hover); border: 1px solid var(--border); border-bottom-left-radius: 3px; }
+  .assistant-msg.bot.pending { color: var(--muted); font-style: italic; }
+  .assistant-msg.bot.error { border-color: var(--down); color: var(--down); }
+  .assistant-input-row { display: flex; gap: 10px; }
+  .assistant-input-row input { flex: 1; }
+
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
@@ -271,6 +281,10 @@
     <button data-tab="profiles">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8H13M3 4H13M3 12H9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
       Profils / Réglages
+    </button>
+    <button data-tab="assistant">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3.5h12v7H5.5L2 13.5v-3H2z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="5.5" cy="7" r="0.8" fill="currentColor"/><circle cx="8" cy="7" r="0.8" fill="currentColor"/><circle cx="10.5" cy="7" r="0.8" fill="currentColor"/></svg>
+      Assistant
     </button>
     <button data-tab="keys">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="5.5" cy="10.5" r="2.5" stroke="currentColor" stroke-width="1.4"/><path d="M7.5 8.5L13 3M13 3V5.5M13 3H10.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -466,6 +480,24 @@
       </div>
     </div>
 
+    <div id="assistant" class="tab-content">
+      <div class="panel">
+        <h2>Assistant intégré</h2>
+        <p class="panel-desc">Connecté à l'API Anthropic avec votre propre clé (facturée à l'usage, jamais partagée). Il voit vos profils actifs, plateformes configurées et l'activité du jour pour des conseils contextualisés — il ne peut rien modifier ni exécuter lui-même.</p>
+        <div id="assistant-unconfigured" class="warn-box" style="display:none">
+          Aucune clé API Anthropic configurée. Ajoutez <code>ANTHROPIC_API_KEY</code> dans votre fichier <code>.env</code> (créez-en une sur <a href="https://console.anthropic.com/" target="_blank" style="color:var(--test)">console.anthropic.com</a>), puis redémarrez le serveur.
+        </div>
+        <div id="assistant-chat-wrap" style="display:none">
+          <label class="chk" style="margin-bottom:12px"><input type="checkbox" id="assistant-include-context" checked> Inclure mes profils/plateformes/activité actuels dans le contexte</label>
+          <div id="assistant-messages" class="assistant-messages"></div>
+          <form id="assistant-form" class="assistant-input-row">
+            <input type="text" id="assistant-input" placeholder="Ex: Mon stop-loss de 2% est-il adapté pour du swing sur BTC ?" autocomplete="off">
+            <button type="submit" class="btn">Envoyer</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <div id="keys" class="tab-content">
       <div class="panel">
         <h2>Clés API</h2>
@@ -625,6 +657,7 @@ const TITLES = {
   terminal: ["Terminal", "Passer un ordre manuellement"],
   strategies: ["Stratégies", "Activer ou mettre en pause par couple exchange/symbole"],
   profiles: ["Profils / Réglages", "Vos scénarios de trading enregistrés"],
+  assistant: ["Assistant", "Accompagnement pour vos réglages, propulsé par Claude"],
   keys: ["Clés API", "Connexion à vos plateformes"],
 };
 
@@ -642,6 +675,9 @@ document.querySelectorAll("nav button").forEach(btn => {
     if (btn.dataset.tab === "chart" && !chartLoadedOnce) {
       chartLoadedOnce = true;
       loadChart();
+    }
+    if (btn.dataset.tab === "assistant") {
+      checkAssistantStatus();
     }
   });
 });
@@ -1148,6 +1184,57 @@ document.getElementById("chart-save-profile").addEventListener("click", async ()
   } catch (err) {
     resultBox.style.borderColor = "var(--down)";
     resultBox.textContent = "Erreur: " + err.message;
+  }
+});
+
+// --- Assistant intégré ---
+let assistantHistory = [];
+let assistantChecked = false;
+
+async function checkAssistantStatus() {
+  if (assistantChecked) return;
+  assistantChecked = true;
+  try {
+    const status = await fetchJSON("/api/assistant/status");
+    document.getElementById(status.configured ? "assistant-chat-wrap" : "assistant-unconfigured").style.display = "block";
+    if (!status.configured) document.getElementById("assistant-chat-wrap").style.display = "none";
+  } catch (err) {
+    document.getElementById("assistant-unconfigured").style.display = "block";
+  }
+}
+
+function appendAssistantMessage(role, text, extraClass) {
+  const container = document.getElementById("assistant-messages");
+  const div = document.createElement("div");
+  div.className = `assistant-msg ${role}${extraClass ? " " + extraClass : ""}`;
+  div.textContent = text;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div;
+}
+
+document.getElementById("assistant-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = document.getElementById("assistant-input");
+  const message = input.value.trim();
+  if (!message) return;
+  input.value = "";
+  appendAssistantMessage("user", message);
+  const pendingMsg = appendAssistantMessage("bot", "…", "pending");
+  const includeContext = document.getElementById("assistant-include-context").checked;
+
+  try {
+    const res = await fetchJSON("/api/assistant/chat", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, history: assistantHistory, include_context: includeContext }),
+    });
+    pendingMsg.remove();
+    appendAssistantMessage("bot", res.reply);
+    assistantHistory.push({ role: "user", content: message });
+    assistantHistory.push({ role: "assistant", content: res.reply });
+  } catch (err) {
+    pendingMsg.remove();
+    appendAssistantMessage("bot", "Erreur: " + err.message, "error");
   }
 });
 
